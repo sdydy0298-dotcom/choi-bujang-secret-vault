@@ -63,7 +63,7 @@ Windows PowerShell에서 메모 문장을 하나씩 검사합니다.
 Get-ChildItem public,api -Recurse -File | Select-String -SimpleMatch "<MEMO_TEXT>"
 ```
 
-정상 결과는 **출력 없음**입니다. 특히 `public/data.json`은 `sampleMarker`만 유지하고 `notes`가 빈 배열이어야 합니다.
+정상 결과는 **출력 없음**입니다. 특히 2단계의 `public/data.json`은 1단계 확인 표시 `sampleMarker`도 제거되고 `notes`가 빈 배열이어야 합니다.
 
 #### 3. 새 배포 후 공개 정적 경로 확인
 
@@ -79,6 +79,6 @@ curl -fsS <DEPLOY_URL>/aleph.json | findstr /C:"<MEMO_TEXT>"
 
 #### 현재 확인 결과와 남은 약점
 
-- 2단계 저장점 후보의 현재 작업 파일과 `public`/`api`를 검사했을 때 가상 메모 본문 4개는 **0건 검색**되었습니다. 공개 `data.json`에도 메모 본문은 없고 `notes`는 빈 배열입니다.
+- 2단계 저장점 후보의 현재 작업 파일과 `public`/`api`를 검사했을 때 가상 메모 본문 4개는 **0건 검색**되었습니다. 공개 `data.json`에는 1단계 확인 표시 `sampleMarker`도 없고 `notes`는 빈 배열입니다.
 - 이 README를 작성하는 시점에는 아직 2단계 저장점을 GitHub에 push하고 새 Production 배포를 만든 뒤의 원격/실배포 검증을 완료하지 않았습니다. 따라서 기존 1단계 Git 커밋과 기존 Vercel 배포에 남은 과거 노출이 해소됐다고 기록하지 않습니다.
 - `/api/notes`에는 아직 인증이나 사용자 확인이 없습니다. 2단계 배포 후 비로그인 `GET /api/notes`가 가상 메모 네 건을 반환하는 것은 현재 단계의 의도된 동작인 동시에 **남아 있는 공개 API 약점**입니다. 3단계 전까지 실제 개인정보나 실제 학생 자료를 저장하지 않습니다.

@@ -21,7 +21,7 @@ if (config.step === 1) {
   if (data.notes.length !== 0) {
     throw new Error('2단계에서는 공개 data.json에 가상 메모 본문을 남기면 안 됩니다.');
   }
-  const publicData = { sampleMarker: config.sampleMarker, notes: [] };
+  const publicData = { notes: [] };
   await writeFile(output, `${JSON.stringify(publicData, null, 2)}\n`, 'utf8');
   console.log('2단계 공개 data.json을 메모 없는 정적 파일로 생성했습니다.');
 } else {

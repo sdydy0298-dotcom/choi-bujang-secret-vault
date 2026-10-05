@@ -39,8 +39,8 @@ export async function runAttackChecks(config) {
   if (staticResponse.ok) {
     try {
       const data = await staticResponse.json();
-      staticProtected = data?.sampleMarker === config.sampleMarker && Array.isArray(data.notes)
-        && data.notes.length === 0;
+      staticProtected = Array.isArray(data?.notes) && data.notes.length === 0
+        && !Object.prototype.hasOwnProperty.call(data, 'sampleMarker');
     } catch {
       // Non-JSON is recorded as a failed self-check below.
     }
