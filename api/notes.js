@@ -7,13 +7,12 @@ const JSON_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
   'X-Content-Type-Options': 'nosniff',
 };
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 let verifyLogin;
 
 function sendJson(response, status, body) {
-  for (const [name, value] of Object.entries(JSON_HEADERS)) {
-    response.setHeader(name, value);
-  }
+  for (const [name, value] of Object.entries(JSON_HEADERS)) response.setHeader(name, value);
   response.status(status).json(body);
 }
 
@@ -22,9 +21,30 @@ function unauthorized(response) {
   return sendJson(response, 401, { error: 'UNAUTHORIZED' });
 }
 
+function requestBody(request) {
+  if (request.body && typeof request.body === 'object') return request.body;
+  if (typeof request.body === 'string') {
+    try { return JSON.parse(request.body); } catch { return null; }
+  }
+  return null;
+}
+
+function serverClient(url, secret) {
+  return createClient(url, secret, {
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+  });
+}
+
+async function verifiedIdentity(request, secret) {
+  verifyLogin ??= createLoginVerifier({ config, supabaseSecretKey: secret });
+  const authorization = typeof request.headers.authorization === 'string'
+    ? request.headers.authorization : null;
+  return verifyLogin(authorization);
+}
+
 export default async function handler(request, response) {
-  if (request.method !== 'GET') {
-    response.setHeader('Allow', 'GET');
+  if (!['GET', 'POST'].includes(request.method)) {
+    response.setHeader('Allow', 'GET, POST');
     return sendJson(response, 405, { error: 'METHOD_NOT_ALLOWED' });
   }
 
@@ -34,37 +54,56 @@ export default async function handler(request, response) {
     return sendJson(response, 503, { error: 'DATA_SOURCE_NOT_CONFIGURED' });
   }
 
+  let identity;
   try {
-    verifyLogin ??= createLoginVerifier({ config, supabaseSecretKey });
+    identity = await verifiedIdentity(request, supabaseSecretKey);
   } catch {
     return sendJson(response, 503, { error: 'LOGIN_VERIFIER_NOT_CONFIGURED' });
   }
+  if (!identity) return unauthorized(response);
 
-  const authorization = typeof request.headers.authorization === 'string'
-    ? request.headers.authorization
-    : null;
-  const identity = await verifyLogin(authorization);
-  if (!identity) {
-    return unauthorized(response);
+  const supabase = serverClient(supabaseUrl, supabaseSecretKey);
+
+  if (request.method === 'GET') {
+    const { data, error } = await supabase
+      .schema('defense')
+      .from('notes')
+      .select('id, title, content, owner_id, created_at')
+      .order('created_at', { ascending: true });
+
+    if (error) return sendJson(response, 502, { error: 'DATA_SOURCE_UNAVAILABLE' });
+
+    return sendJson(response, 200, {
+      notes: (data ?? []).map(note => ({
+        id: note.id,
+        title: note.title,
+        body: note.content,
+      })),
+    });
   }
 
-  const supabase = createClient(supabaseUrl, supabaseSecretKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-      detectSessionInUrl: false,
-    },
-  });
+  const body = requestBody(request);
+  if (!body || typeof body.title !== 'string' || typeof body.body !== 'string'
+      || !body.title.trim() || body.title.length > 200 || body.body.length > 5000
+      || (body.id != null && (typeof body.id !== 'string' || !UUID.test(body.id)))) {
+    return sendJson(response, 400, { error: 'INVALID_NOTE' });
+  }
 
-  const { data, error } = await supabase
+  const id = body.id ?? crypto.randomUUID();
+  const { error } = await supabase
     .schema('defense')
     .from('notes')
-    .select('title, content')
-    .order('id', { ascending: true });
+    .insert({
+      id,
+      owner_id: identity.userId,
+      title: body.title.trim(),
+      content: body.body,
+    });
 
   if (error) {
+    if (error.code === '23505') return sendJson(response, 409, { error: 'NOTE_ALREADY_EXISTS' });
     return sendJson(response, 502, { error: 'DATA_SOURCE_UNAVAILABLE' });
   }
 
-  return sendJson(response, 200, { notes: data ?? [] });
+  return sendJson(response, 201, { id });
 }
