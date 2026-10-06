@@ -32,6 +32,11 @@ export async function runAttackChecks(config) {
       observed: visible ? '비로그인 요청에서 공개 가상 메모 확인 표시가 보임' : `비로그인 요청에서 확인 표시가 보이지 않음 (HTTP ${response.status})` }];
   }
 
+  const pageResponse = await fetch(new URL('/', app), {
+    redirect: 'error', signal: AbortSignal.timeout(10000),
+  });
+  const pageAvailable = pageResponse.ok;
+
   const staticResponse = await fetch(new URL('/data.json', app), {
     redirect: 'error', signal: AbortSignal.timeout(10000),
   });
@@ -60,6 +65,11 @@ export async function runAttackChecks(config) {
   }
 
   return [
+    {
+      attackId: 'main_page_available',
+      expected: '비로그인 GET / 요청에서 자료실 화면 진입점이 정상 응답함',
+      observed: pageAvailable ? '메인 화면 진입점이 HTTP 200대로 응답함' : `메인 화면 진입점 응답을 확인하지 못함 (HTTP ${pageResponse.status})`,
+    },
     {
       attackId: 'static_note_seed_removed',
       expected: '비로그인 /data.json에는 가상 메모가 남지 않음',
