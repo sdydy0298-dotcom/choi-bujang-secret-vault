@@ -55,3 +55,19 @@ test('first attack check reads public data.json without credentials', async () =
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test('stage 5 identity includes routes and original API URL', () => {
+  const stage5Config = {
+    ...config,
+    step: 5,
+    allowedRoutes: ['GET /api/notes', 'POST /api/notes'],
+    originalApiUrl: 'https://project.supabase.co/rest/v1/notes',
+  };
+
+  const identity = deploymentIdentity(env, stage5Config);
+  assert.deepEqual(identity.allowedRoutes, stage5Config.allowedRoutes);
+  assert.equal(identity.originalApiUrl, stage5Config.originalApiUrl);
+  assert.throws(() => deploymentIdentity(env, { ...stage5Config, originalApiUrl: null }));
+  assert.throws(() => deploymentIdentity(env, { ...stage5Config, allowedRoutes: [] }));
+});
