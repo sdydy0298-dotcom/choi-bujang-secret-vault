@@ -180,6 +180,14 @@
       remove.textContent = '삭제';
 
       edit.addEventListener('click', () => {
+        const existingForm = item.querySelector('.edit-form');
+        if (existingForm) {
+          existingForm.querySelector('input')?.focus();
+          return;
+        }
+
+        edit.disabled = true;
+
         const form = document.createElement('form');
         form.className = 'edit-form';
 
@@ -206,7 +214,10 @@
         row.append(save, cancel);
         form.append(titleInput, bodyInput, row);
 
-        cancel.addEventListener('click', () => form.remove());
+        cancel.addEventListener('click', () => {
+          form.remove();
+          edit.disabled = false;
+        });
 
         form.addEventListener('submit', async (event) => {
           event.preventDefault();
@@ -221,10 +232,12 @@
             showMessage(noteMessage, error.message, true);
           } finally {
             save.disabled = false;
+            if (document.body.contains(item)) edit.disabled = false;
           }
         });
 
         item.append(form);
+        titleInput.focus();
       });
 
       remove.addEventListener('click', async () => {
