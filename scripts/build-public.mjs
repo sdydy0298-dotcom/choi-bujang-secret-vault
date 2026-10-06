@@ -17,13 +17,13 @@ await mkdir(resolve(root, 'public'), { recursive: true });
 if (config.step === 1) {
   await copyFile(source, output);
   console.log('실습용 공개 자료를 public/data.json에 복사했습니다.');
-} else if (config.step === 2) {
+} else if ([2, 3].includes(config.step)) {
   if (data.notes.length !== 0) {
-    throw new Error('2단계에서는 공개 data.json에 가상 메모 본문을 남기면 안 됩니다.');
+    throw new Error('2단계 이후에는 공개 data.json에 가상 메모 본문을 남기면 안 됩니다.');
   }
   const publicData = { notes: [] };
   await writeFile(output, `${JSON.stringify(publicData, null, 2)}\n`, 'utf8');
-  console.log('2단계 공개 data.json을 메모 없는 정적 파일로 생성했습니다.');
+  console.log(`${config.step}단계 공개 data.json을 메모 없는 정적 파일로 생성했습니다.`);
 } else {
   throw new Error('현재 빌드 도구가 지원하는 방어전 단계를 확인하세요.');
 }
