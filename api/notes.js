@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import config from '../aleph.config.json' with { type: 'json' };
+import { createLoginVerifier } from '../src/verify-login.mjs';
 
 const JSON_HEADERS = {
   'Cache-Control': 'no-store, max-age=0',
@@ -6,11 +8,18 @@ const JSON_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
 };
 
+let verifyLogin;
+
 function sendJson(response, status, body) {
   for (const [name, value] of Object.entries(JSON_HEADERS)) {
     response.setHeader(name, value);
   }
   response.status(status).json(body);
+}
+
+function unauthorized(response) {
+  response.setHeader('WWW-Authenticate', 'Bearer');
+  return sendJson(response, 401, { error: 'UNAUTHORIZED' });
 }
 
 export default async function handler(request, response) {
@@ -23,6 +32,20 @@ export default async function handler(request, response) {
   const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
   if (!supabaseUrl || !supabaseSecretKey) {
     return sendJson(response, 503, { error: 'DATA_SOURCE_NOT_CONFIGURED' });
+  }
+
+  try {
+    verifyLogin ??= createLoginVerifier({ config, supabaseSecretKey });
+  } catch {
+    return sendJson(response, 503, { error: 'LOGIN_VERIFIER_NOT_CONFIGURED' });
+  }
+
+  const authorization = typeof request.headers.authorization === 'string'
+    ? request.headers.authorization
+    : null;
+  const identity = await verifyLogin(authorization);
+  if (!identity) {
+    return unauthorized(response);
   }
 
   const supabase = createClient(supabaseUrl, supabaseSecretKey, {
