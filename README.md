@@ -143,3 +143,8 @@ Supabase `defense.notes`는 RLS가 켜져 있습니다. `anon`에는 테이블 C
 `defense.notes`의 브라우저 직접 역할 권한은 회수했고, 기존 서버 함수의 로그인 확인과 owner_id 소유자 검사는 유지합니다. `aleph.config.json`에는 `step: 5`, 기존 `allowedRoutes`, 쿼리 없는 `originalApiUrl`을 기록합니다.
 
 확인할 항목은 A 계정의 자기 메모 CRUD, B 메모 비노출, 비로그인 메모 API 거부, `/aleph.json`의 5단계 정보, 첫 화면 보안 헤더입니다.
+
+
+### 5단계 제출 보정
+
+첫 판정에서 `S05_ORIGINAL_URL_MISSING`이 확인되어 배포 식별 파일 생성 로직을 보정했습니다. `aleph.config.json`에만 있던 `allowedRoutes`와 `originalApiUrl`을 실제 배포 `/aleph.json`에도 포함하도록 수정했고, 5단계 자기점검도 두 필드의 존재를 확인합니다.

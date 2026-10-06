@@ -20,7 +20,9 @@ export async function runAttackChecks(config) {
     && typeof notesJson?.error === 'string' && notesJson.error.length > 0;
   const staticEmpty = data.ok && Array.isArray(dataJson?.notes) && dataJson.notes.length === 0;
   const identityOk = identity.ok && identityJson?.step === 5
-    && Array.isArray(identityJson?.allowedRoutes) && identityJson.allowedRoutes.length > 0;
+    && Array.isArray(identityJson?.allowedRoutes) && identityJson.allowedRoutes.length > 0
+    && typeof identityJson?.originalApiUrl === 'string'
+    && identityJson.originalApiUrl.startsWith('https://');
   const securityHeader = page.headers.get('x-content-type-options') === 'nosniff'
     || Boolean(page.headers.get('content-security-policy'));
 
@@ -39,8 +41,8 @@ export async function runAttackChecks(config) {
     },
     {
       attackId: 'deployment_identity_available',
-      expected: 'aleph.json에 5단계와 허용 경로가 기록됨',
-      observed: identityOk ? '5단계와 허용 경로 확인'
+      expected: 'aleph.json에 5단계·허용 경로·원본 HTTPS 주소가 기록됨',
+      observed: identityOk ? '5단계·허용 경로·원본 HTTPS 주소 확인'
         : `배포 식별 정보 확인 실패 (HTTP ${identity.status})`,
     },
     {
