@@ -75,6 +75,7 @@ export default async function handler(request, response) {
       .from('notes')
       .select('id, title, content')
       .eq('id', id)
+      .eq('owner_id', identity.userId)
       .maybeSingle();
 
     if (error) return sendJson(response, 502, { error: 'DATA_SOURCE_UNAVAILABLE' });
@@ -85,17 +86,18 @@ export default async function handler(request, response) {
 
   if (request.method === 'PUT') {
     const body = requestBody(request);
-    if (!body || typeof body.title !== 'string' || typeof body.body !== 'string'
+    if (!body || Object.prototype.hasOwnProperty.call(body, 'owner_id')
+        || typeof body.title !== 'string' || typeof body.body !== 'string'
         || !body.title.trim() || body.title.length > 200 || body.body.length > 5000) {
       return sendJson(response, 400, { error: 'INVALID_NOTE' });
     }
 
-    // 3단계에서는 로그인만 확인한다. owner_id 소유권 검사는 4단계에서 추가한다.
     const { data, error } = await supabase
       .schema('defense')
       .from('notes')
       .update({ title: body.title.trim(), content: body.body })
       .eq('id', id)
+      .eq('owner_id', identity.userId)
       .select('id')
       .maybeSingle();
 
@@ -105,12 +107,12 @@ export default async function handler(request, response) {
     return sendJson(response, 200, { id });
   }
 
-  // 3단계에서는 로그인만 확인한다. owner_id 소유권 검사는 4단계에서 추가한다.
   const { data, error } = await supabase
     .schema('defense')
     .from('notes')
     .delete()
     .eq('id', id)
+    .eq('owner_id', identity.userId)
     .select('id')
     .maybeSingle();
 

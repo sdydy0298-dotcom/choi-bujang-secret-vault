@@ -68,7 +68,8 @@ export default async function handler(request, response) {
     const { data, error } = await supabase
       .schema('defense')
       .from('notes')
-      .select('id, title, content, owner_id, created_at')
+      .select('id, title, content, created_at')
+      .eq('owner_id', identity.userId)
       .order('created_at', { ascending: true });
 
     if (error) return sendJson(response, 502, { error: 'DATA_SOURCE_UNAVAILABLE' });
@@ -83,7 +84,8 @@ export default async function handler(request, response) {
   }
 
   const body = requestBody(request);
-  if (!body || typeof body.title !== 'string' || typeof body.body !== 'string'
+  if (!body || Object.prototype.hasOwnProperty.call(body, 'owner_id')
+      || typeof body.title !== 'string' || typeof body.body !== 'string'
       || !body.title.trim() || body.title.length > 200 || body.body.length > 5000
       || (body.id != null && (typeof body.id !== 'string' || !UUID.test(body.id)))) {
     return sendJson(response, 400, { error: 'INVALID_NOTE' });
