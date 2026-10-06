@@ -83,3 +83,21 @@ curl -fsS <DEPLOY_URL>/aleph.json | findstr /C:"<MEMO_TEXT>"
 - 메인 `/` 화면은 계속 열리고 가상 메모 카드 네 건이 표시됩니다. 화면은 정적 `data.json`이 아니라 `GET /api/notes`의 응답을 사용합니다.
 - 비로그인 `GET /api/notes`는 가상 메모 네 건을 반환합니다. 이는 2단계에서 의도적으로 남겨 둔 **공개 API 약점**이며 3단계 전까지 실제 개인정보나 실제 학생 자료를 저장하지 않습니다.
 - 최신 파일에서 노출을 제거했어도 1단계의 공개 Git 커밋과 과거 Vercel 배포 이력은 남을 수 있습니다. 따라서 **과거 노출이 해소됐다고 간주하지 않습니다.**
+
+
+## 3단계 · 진짜 로그인을 붙이기
+
+현재 저장점은 `r5-work`의 3단계 구현입니다. Supabase Auth 이메일·비밀번호 로그인/로그아웃을 사용하고, 브라우저는 로그인 세션의 access token을 `Authorization: Bearer`로 자료 API에 보냅니다. 서버는 틀에 포함된 `src/verify-login.mjs`로 토큰을 검증하며 브라우저가 보낸 `userId`나 `role` 값은 신뢰하지 않습니다.
+
+자료 API는 `GET /api/notes`, `POST /api/notes`, `GET /api/notes/:id`, `PUT /api/notes/:id`, `DELETE /api/notes/:id`를 사용합니다. 모든 경로는 로그인이 필요하며, 인증이 없거나 검증에 실패하면 메모 없이 JSON 오류와 HTTP 401을 반환합니다. 새 메모를 만들 때는 서버가 검증한 사용자 ID를 `owner_id`에 저장합니다.
+
+3단계에서는 **소유자 검사를 아직 하지 않습니다.** 따라서 B 계정으로 로그인해도 A가 만든 메모를 조회·수정·삭제할 수 있으며, 이 남은 약점은 4단계에서 `owner_id`를 기준으로 막습니다. 서버 전용 `SUPABASE_SECRET_KEY`는 Vercel 환경변수에서만 읽고 브라우저 코드·응답·Git에 넣지 않습니다.
+
+### 3단계 확인
+
+- 비로그인 `GET /api/notes`는 401 또는 403과 JSON 오류를 반환해야 합니다.
+- 정상 A 로그인 뒤 목록 조회와 가상 메모 추가·수정·삭제가 동작해야 합니다.
+- 공개 `/data.json`은 계속 메모 0건이어야 합니다.
+- 배포 `/aleph.json`이 열리고 `step`이 3이어야 합니다.
+- 첫 화면 응답에는 `X-Content-Type-Options: nosniff`가 붙습니다.
+- B가 A의 메모에 접근할 수 있는 상태는 3단계의 의도된 잔여 약점이며 4단계에서 수정합니다.
