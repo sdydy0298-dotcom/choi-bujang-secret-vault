@@ -1,7 +1,7 @@
 // The student changes this check as each stage adds an attack to the same app.
 // Never return tokens, private keys, real names, or note bodies.
 export async function runAttackChecks(config) {
-  if (![1, 2, 3].includes(config.step)) throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
+  if (![1, 2, 3, 4].includes(config.step)) throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
   let app;
   try {
     app = new URL(config.publicAppUrl);
@@ -118,7 +118,7 @@ export async function runAttackChecks(config) {
   if (identityResponse.ok) {
     try {
       const data = await identityResponse.json();
-      deploymentIdentityOk = data?.step === 3;
+      deploymentIdentityOk = data?.step === config.step;
     } catch {}
   }
 
@@ -138,8 +138,8 @@ export async function runAttackChecks(config) {
     },
     {
       attackId: 'deployment_identity_available',
-      expected: '배포 /aleph.json이 열리고 3단계 식별 정보가 있음',
-      observed: deploymentIdentityOk ? '배포 aleph.json의 step이 3임'
+      expected: `배포 /aleph.json이 열리고 ${config.step}단계 식별 정보가 있음`,
+      observed: deploymentIdentityOk ? `배포 aleph.json의 step이 ${config.step}임`
         : `배포 식별 정보를 확인하지 못함 (HTTP ${identityResponse.status})`,
     },
     {

@@ -9,7 +9,7 @@ const JSON_HEADERS = {
 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
-let verifyLogin;
+// Stage 4 ownership: DB reads and writes use the verified identity.userId.\nlet verifyLogin;
 
 function sendJson(response, status, body) {
   for (const [name, value] of Object.entries(JSON_HEADERS)) response.setHeader(name, value);

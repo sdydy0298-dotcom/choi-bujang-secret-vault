@@ -101,3 +101,21 @@ curl -fsS <DEPLOY_URL>/aleph.json | findstr /C:"<MEMO_TEXT>"
 - 배포 `/aleph.json`이 열리고 `step`이 3이어야 합니다.
 - 첫 화면 응답에는 `X-Content-Type-Options: nosniff`가 붙습니다.
 - B가 A의 메모에 접근할 수 있는 상태는 3단계의 의도된 잔여 약점이며 4단계에서 수정합니다.
+
+
+## 4단계 · 로그인해도 내 자료만 보이게 하기
+
+현재 저장점은 `r5-work`의 4단계 구현입니다. 로그인 토큰에서 서버가 검증한 사용자 ID를 기준으로 `defense.notes.owner_id`를 비교하며, 목록·단건 조회·수정·삭제는 모두 본인 소유 행만 대상으로 합니다. 새 메모의 `owner_id`도 URL이나 요청 본문 값을 사용하지 않고 검증된 사용자 ID로 서버가 지정합니다.
+
+자료 API 경로는 3단계와 동일하게 `GET /api/notes`, `POST /api/notes`, `GET /api/notes/:id`, `PUT /api/notes/:id`, `DELETE /api/notes/:id`입니다. 다른 사용자의 UUID를 직접 넣어 조회·수정·삭제해도 대상 행이 없던 것처럼 거부되며, 요청 본문으로 `owner_id` 변경을 시도해도 허용하지 않습니다.
+
+Supabase `defense.notes`는 RLS가 켜져 있습니다. `anon`에는 테이블 CRUD 권한이 없고, `authenticated`에는 SELECT·INSERT·UPDATE·DELETE만 부여합니다. SELECT·DELETE는 `USING (auth.uid() = owner_id)`, INSERT는 `WITH CHECK (auth.uid() = owner_id)`, UPDATE는 두 조건을 모두 적용해 기존 행과 변경 뒤 행의 소유자가 모두 본인일 때만 허용합니다. 서버 전용 `service_role`은 API 내부에서만 사용하고 브라우저나 Git에는 노출하지 않습니다.
+
+### 4단계 확인
+
+- 비로그인 `GET /api/notes`는 401 또는 403과 JSON 오류를 반환해야 합니다.
+- A와 B는 로그인 후 각각 자기 메모만 목록에서 확인할 수 있어야 합니다.
+- A/B는 자기 메모 추가·수정·삭제를 유지하고 상대 메모 UUID 직접 접근은 거부되어야 합니다.
+- 공개 `/data.json`은 계속 메모 0건이어야 합니다.
+- 배포 `/aleph.json`이 열리고 `step`이 4여야 합니다.
+- 첫 화면 응답에는 `X-Content-Type-Options: nosniff`가 유지됩니다.

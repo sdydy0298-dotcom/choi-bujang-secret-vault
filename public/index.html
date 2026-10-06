@@ -45,10 +45,10 @@
 </head>
 <body>
   <main>
-    <div class="eyebrow">BYTE BACK · 3단계 인증</div>
-    <h1>인증된 자료실</h1>
-    <p>Supabase Auth 로그인 토큰을 서버가 검증한 뒤에만 가상 메모를 읽고 변경합니다.</p>
-    <div class="notice">3단계에서는 로그인 여부만 확인합니다. 다른 사용자가 만든 메모의 소유권 검사는 아직 하지 않으며, 이 허점은 4단계에서 막습니다.</div>
+    <div class="eyebrow">BYTE BACK · 4단계 소유자 보호</div>
+    <h1>내 자료실</h1>
+    <p>로그인한 사용자와 메모 소유자를 서버가 비교해 본인 가상 메모만 읽고 변경합니다.</p>
+    <div class="notice">읽기·추가·수정·삭제 모두 서버가 검증한 사용자 ID와 owner_id가 일치하는 메모만 허용합니다.</div>
 
     <section class="panel" aria-labelledby="auth-title">
       <div class="head">
