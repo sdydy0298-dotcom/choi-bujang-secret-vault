@@ -9,7 +9,8 @@ const JSON_HEADERS = {
 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
-// Stage 4 ownership: detail operations require both note id and verified identity.userId.\nlet verifyLogin;
+// Stage 4 ownership: detail operations require both note id and verified identity.userId.
+let verifyLogin;
 
 function sendJson(response, status, body) {
   for (const [name, value] of Object.entries(JSON_HEADERS)) response.setHeader(name, value);
