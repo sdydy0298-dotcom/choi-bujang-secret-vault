@@ -3,31 +3,167 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BYTE BACK | 점령된 자료실</title>
+  <title>BYTE BACK | 자료실 로그인</title>
   <style>
     :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; background: #101a28; color: #ecf4ff; }
     main { max-width: 760px; margin: 0 auto; padding: 44px 22px 64px; }
     .eyebrow { color: #8ad8df; font-size: 14px; font-weight: 700; letter-spacing: .08em; }
     h1 { margin: 16px 0; font-size: clamp(30px, 7vw, 48px); line-height: 1.2; }
     p { font-size: 17px; line-height: 1.7; color: #bfd0e5; }
-    .notice { margin: 26px 0; padding: 18px; border: 1px solid #d07384; border-radius: 14px; color: #ffe3e8; background: #612a3544; }
+    .notice { margin: 26px 0; padding: 18px; border: 1px solid #d4a85b; border-radius: 14px; color: #fff1cd; background: #5d472844; }
+    .auth-card { margin: 26px 0; padding: 20px; border: 1px solid #51667c; border-radius: 14px; background: #162538; }
+    .auth-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+    .auth-head strong { font-size: 19px; }
+    .auth-state { color: #8ad8df; font-size: 14px; font-weight: 700; }
+    form { display: grid; gap: 12px; }
+    label { display: grid; gap: 7px; color: #bfd0e5; font-size: 14px; }
+    input { width: 100%; border: 1px solid #51667c; border-radius: 10px; background: #101a28; color: #ecf4ff; padding: 12px 13px; font: inherit; }
+    input:focus { outline: 2px solid #8ad8df; outline-offset: 1px; }
+    button { border: 0; border-radius: 10px; padding: 12px 16px; background: #8ad8df; color: #10202d; font: inherit; font-weight: 800; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: wait; }
+    .secondary { background: #26394e; color: #ecf4ff; border: 1px solid #51667c; }
+    .auth-message { min-height: 24px; margin: 12px 0 0; color: #bfd0e5; font-size: 14px; }
+    .auth-message.error { color: #ffb8c4; }
+    .session-box { display: none; gap: 12px; }
+    .session-box[data-visible="true"] { display: grid; }
+    .session-email { word-break: break-all; color: #ecf4ff; }
     ul { list-style: none; display: grid; gap: 12px; padding: 0; }
     li { border: 1px solid #51667c; border-radius: 14px; padding: 17px 19px; background: #1a2a3d; }
-    strong { display: block; font-size: 18px; margin-bottom: 5px; }
+    li strong { display: block; font-size: 18px; margin-bottom: 5px; }
     li span { color: #bfd0e5; }
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
   <main>
-    <div class="eyebrow">BYTE BACK · 1단계 피해 확인</div>
-    <h1>점령된 자료실</h1>
-    <p>지금은 보호 장치가 없는 상태입니다. 아래 기록은 모두 실습을 위해 만든 가상 자료입니다.</p>
-    <div class="notice">로그인하지 않은 방문자도 자료를 볼 수 있습니다. 공개 범위를 확인하고, 다음 제작 단계에서 접근을 차례로 막아 주세요.</div>
+    <div class="eyebrow">BYTE BACK · 3단계 인증 준비</div>
+    <h1>자료실 로그인</h1>
+    <p>Supabase Auth 이메일·비밀번호 로그인으로 현재 사용자의 로그인 상태를 확인합니다.</p>
+    <div class="notice">지금 제작 단위에서는 로그인·로그아웃 화면만 붙입니다. 자료 API 보호는 다음 제작에서 서버 토큰 검증을 붙인 뒤 적용합니다.</div>
+
+    <section class="auth-card" aria-labelledby="auth-title">
+      <div class="auth-head">
+        <strong id="auth-title">계정 인증</strong>
+        <span id="auth-state" class="auth-state">확인 중</span>
+      </div>
+
+      <form id="login-form">
+        <label>
+          이메일
+          <input id="email" name="email" type="email" autocomplete="username" required>
+        </label>
+        <label>
+          비밀번호
+          <input id="password" name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <button id="login-button" type="submit">로그인</button>
+      </form>
+
+      <div id="session-box" class="session-box">
+        <div>
+          <div class="auth-state">로그인됨</div>
+          <div id="session-email" class="session-email"></div>
+        </div>
+        <button id="logout-button" class="secondary" type="button">로그아웃</button>
+      </div>
+
+      <p id="auth-message" class="auth-message" role="status" aria-live="polite"></p>
+    </section>
+
     <ul id="notes" aria-live="polite"><li>가상 자료를 불러오는 중입니다.</li></ul>
   </main>
+
   <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/+esm';
+
+    const SUPABASE_URL = 'https://gbhmupoxedmyphjnudhb.supabase.co';
+    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_-5Ihlqvs1LfuzYVjoprKzA_IdgJ1EYe';
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+    const form = document.querySelector('#login-form');
+    const emailInput = document.querySelector('#email');
+    const passwordInput = document.querySelector('#password');
+    const loginButton = document.querySelector('#login-button');
+    const logoutButton = document.querySelector('#logout-button');
+    const sessionBox = document.querySelector('#session-box');
+    const sessionEmail = document.querySelector('#session-email');
+    const authState = document.querySelector('#auth-state');
+    const authMessage = document.querySelector('#auth-message');
     const list = document.querySelector('#notes');
+
+    function showMessage(message = '', isError = false) {
+      authMessage.textContent = message;
+      authMessage.classList.toggle('error', isError);
+    }
+
+    function renderSession(session) {
+      const user = session?.user ?? null;
+      const loggedIn = Boolean(user);
+
+      form.hidden = loggedIn;
+      sessionBox.dataset.visible = String(loggedIn);
+      sessionEmail.textContent = user?.email ?? '';
+      authState.textContent = loggedIn ? '로그인됨' : '로그아웃됨';
+
+      if (!loggedIn) {
+        passwordInput.value = '';
+      }
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      loginButton.disabled = true;
+      showMessage('로그인 확인 중입니다.');
+
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+      loginButton.disabled = false;
+
+      if (error) {
+        renderSession(null);
+        showMessage(`로그인 실패: ${error.message}`, true);
+        return;
+      }
+
+      renderSession(data.session);
+      showMessage('로그인되었습니다.');
+    });
+
+    logoutButton.addEventListener('click', async () => {
+      logoutButton.disabled = true;
+      showMessage('로그아웃 중입니다.');
+
+      const { error } = await supabase.auth.signOut();
+
+      logoutButton.disabled = false;
+
+      if (error) {
+        showMessage(`로그아웃 실패: ${error.message}`, true);
+        return;
+      }
+
+      renderSession(null);
+      showMessage('로그아웃되었습니다.');
+    });
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+      renderSession(session);
+    });
+
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      renderSession(null);
+      showMessage(`로그인 상태 확인 실패: ${sessionError.message}`, true);
+    } else {
+      renderSession(sessionData.session);
+    }
+
     try {
       const response = await fetch('/api/notes', { cache: 'no-store' });
       if (!response.ok) throw new Error('서버 자료를 읽을 수 없습니다.');
