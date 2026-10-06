@@ -17,7 +17,7 @@ await mkdir(resolve(root, 'public'), { recursive: true });
 if (config.step === 1) {
   await copyFile(source, output);
   console.log('실습용 공개 자료를 public/data.json에 복사했습니다.');
-} else if ([2, 3, 4].includes(config.step)) {
+} else if ([2, 3, 4, 5].includes(config.step)) {
   if (data.notes.length !== 0) {
     throw new Error('2단계 이후에는 공개 data.json에 가상 메모 본문을 남기면 안 됩니다.');
   }
