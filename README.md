@@ -148,3 +148,14 @@ Supabase `defense.notes`는 RLS가 켜져 있습니다. `anon`에는 테이블 C
 ### 5단계 제출 보정
 
 첫 판정에서 `S05_ORIGINAL_URL_MISSING`이 확인되어 배포 식별 파일 생성 로직을 보정했습니다. `aleph.config.json`에만 있던 `allowedRoutes`와 `originalApiUrl`을 실제 배포 `/aleph.json`에도 포함하도록 수정했고, 5단계 자기점검도 두 필드의 존재를 확인합니다.
+
+
+## 6단계 저장점 · 등록 기기 접근 정책
+
+- 기존 GitHub `r5-work`, Vercel 자료실 화면 및 Supabase `defense.notes`는 그대로 유지합니다. 메모 CRUD, 로그인 및 소유자 검사는 기존 서버 함수가 담당합니다.
+- `aleph.config.json`: `protectedServiceId: "notes"`, `protectedReadRoutes: ["GET /notes", "GET /notes/:id"]`. 이 값은 엔진 판정 계약의 서비스/읽기 라우트이며 서버 인증서·CA·개인키가 아닙니다. 기존 `allowedRoutes`와 `originalApiUrl`은 유지합니다.
+- `src/decider.mjs`: 엔진이 확인한 `deviceRegistered === true`, 가명 주체와 형식이 맞는 기기 ID, `notes` 서비스의 GET 읽기 경로만 허용합니다. 미등록/검증 불충분/다른 경로는 `device_not_registered`로 거부합니다. 사용자-기기 인증서 연결, mTLS, 반별 릴레이는 학생 판정기가 아닌 **운영 엔진이 검증**해야 합니다.
+- 로컬 재현: `npm run build -- --local` 및 `npm run decider:test`. 로컬 가상 요청 통과는 실제 mTLS 접속 또는 심판 판정의 증거가 아닙니다.
+- **접속 도구**: 현재 저장소에 반별 공식 설치 명령/설명서가 포함되어 있지 않습니다. 반에서 제공한 공식 한 줄 설치 명령을 포털 안내서에서 확인한 뒤 실행합니다. 명령을 추측하거나 인증서·CA·서명키를 만들어 사용하지 마세요.
+- 접속 도구 설치 후 기존 자료실 주소 `https://secret-vault-sdydy0298.vercel.app`와 기존 시험 계정으로 정상 로그인, 목록 읽기, 단건 읽기를 확인합니다. 미등록 인증서·mTLS 없는 호출·계정 혼합 공격은 **심판/운영 엔진**에서 별도로 검증해야 합니다.
+- **중요**: 공식 엔진의 프록시/릴레이 설정 없이 위 판정기만 배포하면 원래 Vercel URL을 우회하여 직접 자료를 읽는 접근을 막을 수 없습니다. 엔진 연결 완료 전에는 전체 6단계 방어 성공으로 기록하지 않습니다.
