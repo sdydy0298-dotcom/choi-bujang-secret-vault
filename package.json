@@ -9,7 +9,8 @@
     "decider:test": "node scripts/decider-test.mjs",
     "detect:test": "node scripts/detect-test.mjs",
     "fixture:7": "node scripts/fixture-7.mjs",
-    "test:6": "node --test test/step6.test.mjs"
+    "test:6": "node --test test/step6.test.mjs",
+    "prepare:6": "node scripts/prepare-stage6.mjs"
   },
   "engines": {
     "node": ">=22"
