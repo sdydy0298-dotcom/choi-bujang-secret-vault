@@ -1,5 +1,5 @@
 export async function runAttackChecks(config) {
-  if (config.step !== 5) throw new Error('현재 자기점검은 5단계 저장점 기준입니다.');
+  if (config.step !== 6) throw new Error('현재 자기점검은 6단계 저장점 기준입니다.');
 
   const app = new URL(config.publicAppUrl);
   const options = { redirect: 'error', signal: AbortSignal.timeout(10000) };
@@ -19,7 +19,7 @@ export async function runAttackChecks(config) {
   const jsonRejected = [401, 403].includes(notes.status)
     && typeof notesJson?.error === 'string' && notesJson.error.length > 0;
   const staticEmpty = data.ok && Array.isArray(dataJson?.notes) && dataJson.notes.length === 0;
-  const identityOk = identity.ok && identityJson?.step === 5
+  const identityOk = identity.ok && identityJson?.step === 6
     && Array.isArray(identityJson?.allowedRoutes) && identityJson.allowedRoutes.length > 0
     && typeof identityJson?.originalApiUrl === 'string'
     && identityJson.originalApiUrl.startsWith('https://');
@@ -41,7 +41,7 @@ export async function runAttackChecks(config) {
     },
     {
       attackId: 'deployment_identity_available',
-      expected: 'aleph.json에 5단계·허용 경로·원본 HTTPS 주소가 기록됨',
+      expected: 'aleph.json에 6단계·허용 경로·원본 HTTPS 주소가 기록됨',
       observed: identityOk ? '5단계·허용 경로·원본 HTTPS 주소 확인'
         : `배포 식별 정보 확인 실패 (HTTP ${identity.status})`,
     },
