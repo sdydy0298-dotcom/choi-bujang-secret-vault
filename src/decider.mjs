@@ -12,6 +12,7 @@ export async function decide(request) {
     ruleIds: [RULE_IDS[0]],
   };
 
+  // The engine, not this function, verifies that subject and device belong together.
   // Fail closed for an absent/invalid registration assertion.
   if (request?.schema !== 'aleph.decision.v1'
       || request.deviceRegistered !== true

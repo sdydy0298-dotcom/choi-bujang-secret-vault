@@ -87,6 +87,20 @@ try {
   if (new Set(attackAttempts.map(item => item.attackId)).size !== attackAttempts.length) {
     fail('공격 점검 ID가 중복되었습니다.');
   }
+  if (config.step === 6) {
+    const required = ['anonymous_notes_rejected', 'static_notes_empty',
+      'deployment_identity_available', 'main_security_header', 'auth_config_available'];
+    for (const id of required) {
+      const attempt = attackAttempts.find(item => item.attackId === id);
+      if (!attempt || !attempt.observed.startsWith('통과:')) {
+        fail('6단계 공개 배포 자기점검 실패: ' + id
+          + (attempt ? ' (' + attempt.observed + ')' : ' (미실행)'));
+      }
+    }
+    if (!/(기기|등록|device)/iu.test(notes.explanation)) {
+      fail('bundle-notes.json의 explanation에 6단계 기기 규칙 설명을 작성해 주세요.');
+    }
+  }
   const bundle = {
     schema: 'aleph.defense.submission.v2', step: config.step, commit, repoUrl,
     changedFiles, policyRules,

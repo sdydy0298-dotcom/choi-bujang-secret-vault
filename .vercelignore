@@ -1,0 +1,6 @@
+.vercel/
+.env*
+_local/
+artifacts/
+bundle-notes.json
+node_modules/
