@@ -10,7 +10,9 @@
     "detect:test": "node scripts/detect-test.mjs",
     "fixture:7": "node scripts/fixture-7.mjs",
     "test:6": "node --test test/step6.test.mjs",
-    "prepare:6": "node scripts/prepare-stage6.mjs"
+    "prepare:6": "node scripts/prepare-stage6.mjs",
+    "test:7": "node --test test/step7.test.mjs",
+    "prepare:7": "node scripts/prepare-stage7.mjs"
   },
   "engines": {
     "node": ">=22"

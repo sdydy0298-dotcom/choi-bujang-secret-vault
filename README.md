@@ -150,24 +150,29 @@ Supabase `defense.notes`는 RLS가 켜져 있습니다. `anon`에는 테이블 C
 첫 판정에서 `S05_ORIGINAL_URL_MISSING`이 확인되어 배포 식별 파일 생성 로직을 보정했습니다. `aleph.config.json`에만 있던 `allowedRoutes`와 `originalApiUrl`을 실제 배포 `/aleph.json`에도 포함하도록 수정했고, 5단계 자기점검도 두 필드의 존재를 확인합니다.
 
 
-## 6단계 저장점 · 등록 기기 접근 정책
+## 6단계 저장점 · 등록 기기 접근 정책 (정정된 안내 반영)
 
-- 기존 GitHub `r5-work`, Vercel 자료실 화면 및 Supabase `defense.notes`는 그대로 유지합니다. 메모 CRUD, 로그인 및 소유자 검사는 기존 서버 함수가 담당합니다.
-- `aleph.config.json`: `protectedServiceId: "notes"`, `protectedReadRoutes: ["GET /notes", "GET /notes/:id"]`. 이 값은 엔진 판정 계약의 서비스/읽기 라우트이며 서버 인증서·CA·개인키가 아닙니다. 기존 `allowedRoutes`와 `originalApiUrl`은 유지합니다.
-- `src/decider.mjs`: 엔진이 확인한 `deviceRegistered === true`, 가명 주체와 형식이 맞는 기기 ID, `notes` 서비스의 GET 읽기 경로만 허용합니다. 미등록/검증 불충분/다른 경로는 `device_not_registered`로 거부합니다. 사용자-기기 인증서 연결, mTLS, 반별 릴레이는 학생 판정기가 아닌 **운영 엔진이 검증**해야 합니다.
-- 로컬 재현: `npm run build -- --local` 및 `npm run decider:test`. 로컬 가상 요청 통과는 실제 mTLS 접속 또는 심판 판정의 증거가 아닙니다.
-- **접속 도구**: 현재 저장소에 반별 공식 설치 명령/설명서가 포함되어 있지 않습니다. 반에서 제공한 공식 한 줄 설치 명령을 포털 안내서에서 확인한 뒤 실행합니다. 명령을 추측하거나 인증서·CA·서명키를 만들어 사용하지 마세요.
-- 접속 도구 설치 후 기존 자료실 주소 `https://secret-vault-sdydy0298.vercel.app`와 기존 시험 계정으로 정상 로그인, 목록 읽기, 단건 읽기를 확인합니다. 미등록 인증서·mTLS 없는 호출·계정 혼합 공격은 **심판/운영 엔진**에서 별도로 검증해야 합니다.
-- **중요**: 공식 엔진의 프록시/릴레이 설정 없이 위 판정기만 배포하면 원래 Vercel URL을 우회하여 직접 자료를 읽는 접근을 막을 수 없습니다. 엔진 연결 완료 전에는 전체 6단계 방어 성공으로 기록하지 않습니다.
+- 기존 Vercel 자료실·Supabase 데이터·사용자별 로그인/CRUD는 그대로 유지합니다.
+- `docs/DECIDER_REQUEST.md`의 엔진 확인 입력 중 `subjectId`는 가명 주체, `deviceId`는 검증된 기기 ID, `deviceRegistered`는 등록 여부입니다.
+- `src/decider.mjs`의 `device_registered` 규칙은 등록된 기기의 `notes` 읽기만 허용하며 미등록/값 누락은 `deny / device_not_registered`로 거부합니다.
+- **운영 측 수정된 요구사항**: 6단계에는 별도 접속 프로그램 설치가 없습니다. 예전 설치 안내·mTLS 실측 지시는 철회되었습니다. `npm run decider:test`의 정상 허용/미등록 가상 요청 거부를 확인합니다. 이는 실제 운영 릴레이 시험을 뜻하지 않습니다.
+- `npm run build -- --local`, `npm run test:r5`, `npm run test:6`, `npm run decider:test`로 재현합니다. 6단계 저장점 뒤의 테스트 보조 도구는 기존 기능을 변경하지 않습니다.
+- `aleph.config.json`의 `protectedServiceId`/`protectedReadRoutes`는 6단계 초기 안내 때 기록한 부가 항목이며, 공식 판정 계약의 필수 요청 필드로 사용하지 않습니다.
 
+## 7단계 저장점 · 복합 이상 접속 추가 확인
 
-### 6단계 제출 전 검증 보완
+- 변경 범위: `src/decider.mjs`에 **`step_up_required` 규칙 1개**를 추가하고 6단계 `device_registered` 규칙과 응답의 다섯 필드 형식을 유지합니다. 웹 UI, 메모 서버 함수, Supabase DB·RLS는 수정하지 않습니다.
+- 입력 출처: 계약에 있는 `signals.source`가 `judge_fixture`일 때만 그 가상 지역·네트워크·시각을 위험 근거로 사용합니다. 실제 접속의 `none` 또는 누락/알 수 없는 출처는 지역·시각을 정상/위험으로 추측하지 않습니다. 클라이언트 헤더는 신뢰 입력으로 사용하지 않습니다.
+- 판정: 가상 외국 지역(`foreign`), 낯선 네트워크(`unusual`), 이른 시간(0~5시), 최근 900초 안의 `risk_signal` 사건 10회 이상을 위험 근거로 계산하고 **서로 다른 위험 신호 2개 이상**일 때 `step_up / step_up_required`를 요청합니다. 지역 하나만으로 영구 거부하지 않습니다. 미등록 기기는 기존과 같이 먼저 거부합니다.
+- 재확인: 엔진 계약은 `stepUp.verified`와 `stepUp.authAgeSeconds`(성공 시 0~900초)를 제공합니다. 신뢰 가능한 가상 복합 이상 요청에서 미확인이면 `step_up`, 검증된 새 요청이면 `allow`를 반환합니다. 토큰 원문·임의 로그인 시각은 사용하지 않습니다.
+- **실측 여부**: 로컬 `npm run fixture:7`의 재확인 사례는 가상 입력이며 실제 재로그인, 토큰 갱신, 민감 메모 읽기 차단을 입증하지 않습니다. 운영 엔진을 통한 실제 인증 전후 검증은 **미실행**으로 제출 묶음에 기록합니다.
 
-- Vercel CLI 연결으로 생성된 `.vercel/` 및 `.env*`는 Git에서 제외합니다. 배포 업로드에서도 `_local/`, `bundle-notes.json`, `artifacts/` 및 환경변수 파일을 제외합니다.
-- `npm run test:r5`와 `npm run test:6`, `npm run decider:test`로 단계 간 회귀 및 가상 요청의 허용/거부를 점검합니다. **가상 요청 통과는 mTLS 엔진 인증 성공 증거가 아닙니다.**
-- `npm run bundle`은 실제 공개 배포 주소의 홈페이지, 비로그인 API 거부, 정적 메모 0건, 6단계 식별 정보, 로그인 설정 API 중 한 항목이라도 실패하면 제출 묶음을 만들지 않습니다.
-- `bundle-notes.json`은 Git에 넣지 않으며, 이전 2단계 설명 대신 이번 6단계 정책과 미검증 항목을 사실대로 적습니다.
-- **별도 필수 확인:** 포털/강사에게 제공받은 반별 설치 명령으로 공식 접속 도구를 설치하고, 엔진의 인증서·등록 기기·사용자 연결 및 기존 화면 읽기를 실제로 확인해야 합니다. 원본 저장소에는 공식 설치 명령과 mTLS 연결 문서가 포함되지 않습니다.
+### 7단계 확인 순서
 
+1. `npm run test:r5 && npm run test:6 && npm run test:7` — 기존 단계 회귀와 출처 위조/복합 이상 조건을 확인합니다.
+2. `npm run decider:test` — 등록 기기 정상 요청 **통과**, 미등록 기기 **deny / device_not_registered**, 복합 이상 **step_up / step_up_required**, 엔진 재확인 가상 요청 **allow**가 나와야 합니다.
+3. `npm run fixture:7` — 정상 가상 사건 `allow`, 복합 이상 가상 사건 `step_up`를 비교합니다.
+4. `npm run build -- --local` — 공개 `data.json`이 빈 메모 목록인지 확인합니다.
+5. 커밋 및 Production 배포 완료 후 `npm run prepare:7`, `npm run bundle` — 공개 HTTP 점검과 4개 가상 판정 결과를 기록하고, 운영 재로그인 실측은 미실행으로 남깁니다. `bundle-notes.json`과 생성된 `artifacts/submission.json`은 Git에 커밋하지 않습니다.
 
-- 기존 `bundle-notes.json`에 2단계 설명이 남아 있다면 `npm run prepare:6`으로 6단계 설명을 작성합니다. 이미 본인이 작성한 6단계 설명은 유지하며 `blockedAt` 등 다른 항목을 변경하지 않습니다.
+실제 화면 확인: 기존 `https://secret-vault-sdydy0298.vercel.app` 주소와 테스트 계정이 유지되어야 합니다. 원래 로그인과 메모 CRUD는 이전 단계와 동일합니다.

@@ -87,18 +87,35 @@ try {
   if (new Set(attackAttempts.map(item => item.attackId)).size !== attackAttempts.length) {
     fail('공격 점검 ID가 중복되었습니다.');
   }
-  if (config.step === 6) {
+  if ([6, 7].includes(config.step)) {
     const required = ['anonymous_notes_rejected', 'static_notes_empty',
       'deployment_identity_available', 'main_security_header', 'auth_config_available'];
     for (const id of required) {
       const attempt = attackAttempts.find(item => item.attackId === id);
       if (!attempt || !attempt.observed.startsWith('통과:')) {
-        fail('6단계 공개 배포 자기점검 실패: ' + id
+        fail(config.step + '단계 공개 배포 자기점검 실패: ' + id
           + (attempt ? ' (' + attempt.observed + ')' : ' (미실행)'));
       }
     }
     if (!/(기기|등록|device)/iu.test(notes.explanation)) {
-      fail('bundle-notes.json의 explanation에 6단계 기기 규칙 설명을 작성해 주세요.');
+      fail('bundle-notes.json의 explanation에 기기 규칙 설명을 작성해 주세요.');
+    }
+    if (config.step === 7) {
+      const fixtureIds = ['stage7_normal_allow', 'stage7_unregistered_deny',
+        'stage7_composite_step_up', 'stage7_reverified_allow'];
+      for (const id of fixtureIds) {
+        const record = attackAttempts.find(item => item.attackId === id);
+        if (!record || !record.observed.startsWith('통과:')) {
+          fail('7단계 가상 판정 확인 실패: ' + id);
+        }
+      }
+      const live = attackAttempts.find(item => item.attackId === 'stage7_live_relogin');
+      if (!live || !live.observed.startsWith('미실행:')) {
+        fail('운영 엔진의 실측 여부를 사실대로 기록해 주세요.');
+      }
+      if (!/(7단계|추가 확인|복합 이상)/iu.test(notes.explanation)) {
+        fail('bundle-notes.json에 이번 7단계 구현·확인 내용을 적어 주세요.');
+      }
     }
   }
   const bundle = {
