@@ -117,6 +117,7 @@ test('restore route: only signed B can restore its own one row',async()=>{
   return {
    from(table){const clauses=[];
     const q={select(){return q;},eq(k,v){clauses.push([k,v]);return q;},
+     async insert(){return {error:null};},
      async maybeSingle(){
       const r=table==='note_recovery_backups'?backup:current;
       return {data:r&&clauses.every(([k,v])=>r[k]===v)?r:null,error:null};
@@ -136,13 +137,16 @@ test('restore route: only signed B can restore its own one row',async()=>{
   };
  }};
  const factory=new Function('createClient','createLoginVerifier','getNoteScope',
-  'equalHash','noteContentHash','verifiedBackup','config','process',source+'\nreturn handler;');
+  'equalHash','noteContentHash','verifiedBackup','verifyRecoveryPreflight','runPostRestoreChecks','bodySha256','config','process',source+'\nreturn handler;');
  const h=factory(()=>db,()=>async header=>{
   if(header==='Bearer B')return identity;
   if(header==='Bearer A')return {...identity,identity:'a'};
   return null;
  },()=>({owner_id:OWNER,judge_run_id:RUN,judge_identity:'b'}),
- equalHash,noteContentHash,verifiedBackup,{},{
+ equalHash,noteContentHash,verifiedBackup,
+ ()=>({verified:true,version:'stage9-d1004397',baseCommit:STAGE9_SAFE_COMMIT,changedFields:[]}),
+ async()=>({checks:[],allExecutedPassed:true,unexecuted:[]}),
+ body=>createHash('sha256').update(body,'utf8').digest('hex'),{},{
   env:{SUPABASE_URL:'https://mock.invalid',SUPABASE_SECRET_KEY:'test-only-secret'}});
  async function request(header,id=ID){
   return new Promise((resolve,reject)=>{
@@ -158,7 +162,9 @@ test('restore route: only signed B can restore its own one row',async()=>{
  assert.equal(audit.length,0);
  const restored=await request('Bearer B');
  assert.equal(restored.status,200);
- assert.ok(equalHash(restored.body.content_sha256,backup.content_sha256));
+ assert.ok(equalHash(restored.body.sealed_backup_sha256,backup.content_sha256));
+ assert.equal(restored.body.content_sha256,
+   createHash('sha256').update(backup.content).digest('hex'));
  assert.equal(current.content,backup.content);
  assert.equal(untouched.content,'untouched');
  assert.equal(audit.length,1);

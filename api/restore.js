@@ -3,6 +3,8 @@ import config from '../aleph.config.json' with { type: 'json' };
 import { createLoginVerifier } from '../src/verify-login.mjs';
 import { getNoteScope } from '../src/note-scope.mjs';
 import { equalHash, noteContentHash, verifiedBackup } from '../src/stage10-recovery.mjs';
+import { verifyRecoveryPreflight } from '../src/stage10-preflight.mjs';
+import { bodySha256, runPostRestoreChecks } from '../src/stage10-retest.mjs';
 
 // Stage 10. Restore exactly one judge-B note; never accept caller-supplied owner,
 // role, run ID, note contents or token in the request body.
@@ -38,10 +40,11 @@ export default async function handler(req,res) {
   const secret=process.env.SUPABASE_SECRET_KEY;
   const url=process.env.SUPABASE_URL;
   if (!secret || !url) return reply(res,503,{error:'RECOVERY_NOT_CONFIGURED'});
+  const authorization = typeof req.headers?.authorization === 'string' ? req.headers.authorization : null;
   let identity;
   try {
     verify ??= createLoginVerifier({config,supabaseSecretKey:secret});
-    identity = await verify(typeof req.headers?.authorization === 'string' ? req.headers.authorization : null);
+    identity = await verify(authorization);
   } catch {
     return reply(res,503,{error:'LOGIN_VERIFIER_UNAVAILABLE'});
   }
@@ -56,18 +59,34 @@ export default async function handler(req,res) {
     return reply(res,403,{error:'RECOVERY_SCOPE_FORBIDDEN'});
   const id=targetId(req);
   if (!id) return reply(res,400,{error:'INVALID_RECOVERY_TARGET'});
+
+  // A sealed baseline is not trustworthy until re-read and checked in the
+  // *real* restore request. Fail closed BEFORE modifying anything in DB.
+  let preflight;
+  try { preflight=verifyRecoveryPreflight(config); }
+  catch (error) {
+    return reply(res,409,{error:'POLICY_BACKUP_UNVERIFIED',
+      differingFields:Array.isArray(error.fields) ? error.fields : []});
+  }
+
   const db=createClient(url,secret,{
     auth:{autoRefreshToken:false,persistSession:false,detectSessionInUrl:false},
   });
-  const {data:backup,error:readError}=await db.schema('defense')
-    .from('note_recovery_backups')
+  const lookupBackup=()=>db.schema('defense').from('note_recovery_backups')
     .select('note_id,owner_id,judge_run_id,judge_identity,title,content,content_sha256,captured_at,verified_at')
     .eq('note_id',id).eq('owner_id',scope.owner_id)
     .eq('judge_run_id',scope.judge_run_id).eq('judge_identity','b').maybeSingle();
+  const {data:backup,error:readError}=await lookupBackup();
   if (readError) return reply(res,502,{error:'RECOVERY_DATA_UNAVAILABLE'});
   if (!backup) return reply(res,404,{error:'VERIFIED_BACKUP_NOT_FOUND'});
-  if (!verifiedBackup(backup,{...identity,ownerId:scope.owner_id},id))
+  const signedB={...identity,ownerId:scope.owner_id};
+  if (!verifiedBackup(backup,signedB,id))
     return reply(res,409,{error:'BACKUP_INTEGRITY_FAILED'});
+  const {data:reloaded,error:backupRereadError}=await lookupBackup();
+  if (backupRereadError || !reloaded || !verifiedBackup(reloaded,signedB,id) ||
+      !equalHash(reloaded.content_sha256,backup.content_sha256) ||
+      reloaded.title!==backup.title || reloaded.content!==backup.content)
+    return reply(res,409,{error:'BACKUP_RECHECK_FAILED'});
 
   // All-or-nothing stored procedure validates immutable backup, bound owner
   // and run again, then restores one row and appends an audit event.
@@ -85,9 +104,38 @@ export default async function handler(req,res) {
     .eq('id',id).eq('owner_id',scope.owner_id)
     .eq('judge_run_id',scope.judge_run_id).eq('judge_identity','b')
     .maybeSingle();
-  if (verifyError || !current ||
-      !equalHash(noteContentHash(current.title,current.content),backup.content_sha256))
+  const restoredBodyHash=bodySha256(backup.content);
+  if (verifyError || !current || current.id!==id ||
+      current.owner_id!==scope.owner_id ||
+      current.judge_run_id!==scope.judge_run_id ||
+      current.judge_identity!=='b' ||
+      !equalHash(noteContentHash(current.title,current.content),backup.content_sha256) ||
+      !equalHash(bodySha256(current.content),restoredBodyHash))
     return reply(res,502,{error:'POST_RESTORE_VERIFICATION_FAILED'});
+
+  // Real post-restore requests, never synthetic success labels.
+  // Only status/ID-match/hash-match are recorded; no JWT or note contents.
+  const report=await runPostRestoreChecks({
+    origin:config.publicAppUrl, token:authorization.slice(7),
+    noteId:id, expectedBodySha256:restoredBodyHash
+  });
+  const {error:auditError}=await db.schema('defense').from('note_restore_retests')
+    .insert({note_id:id, owner_id:scope.owner_id, judge_run_id:scope.judge_run_id,
+      policy_version:preflight.version, checks:report.checks});
+
   return reply(res,200,{restored:true,id,owner_id:scope.owner_id,
-    content_sha256:backup.content_sha256,operation:outcome.operation});
+    content_sha256:restoredBodyHash,
+    sealed_backup_sha256:backup.content_sha256,
+    operation:outcome.operation,
+    backupVerification:{
+      verified:true, policyVersion:preflight.version,
+      baselineCommit:preflight.baseCommit, changedFields:preflight.changedFields
+    },
+    postRestoreRetests:{
+      checks:report.checks,
+      allExecutedPassed:report.allExecutedPassed,
+      unexecuted:report.unexecuted,
+      persisted:!auditError
+    }
+  });
 }
