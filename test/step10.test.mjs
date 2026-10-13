@@ -131,7 +131,7 @@ test('restore route: only signed B can restore its own one row',async()=>{
     assert.equal(values.p_run_id,RUN);
     current={...current,title:backup.title,content:backup.content};
     audit.push('repaired');
-    return {data:{id:ID,owner_id:OWNER,content_sha256:backup.content_sha256,
+    return {data:{id:ID,owner_id:OWNER,content_sha256:createHash('sha256').update(backup.content).digest('hex'),
       operation:'repaired'},error:null};
    }
   };
