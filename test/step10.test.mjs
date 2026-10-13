@@ -4,7 +4,7 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { STAGE9_SAFE_COMMIT, VERIFIED_POLICY_DIGEST, noteContentHash, equalHash,
+import { STAGE9_SAFE_COMMIT, VERIFIED_POLICY_DIGEST, VERIFIED_POLICY_RAW_DIGEST, noteContentHash, equalHash,
   loadVerifiedPolicy, reloadVerifiedPolicy, policyDiff, restoreTestPolicy, verifiedBackup }
   from '../src/stage10-recovery.mjs';
 import { runAttackChecks } from '../src/attack-check.mjs';
@@ -18,6 +18,27 @@ test('pinned stage9 policy digest and baseline are correct',()=>{
  assert.equal(createHash('sha256').update(JSON.stringify(p)).digest('hex'),VERIFIED_POLICY_DIGEST);
  assert.ok(!p.services.notes.allowedRoutes.includes('GET /api/notes'));
 });
+test('manifest and verified bytes are pinned independently and fail closed',()=>{
+ const backupFile=new URL('../recovery/stage9-safe-policy.json',import.meta.url);
+ const manifestFile=new URL('../recovery/MANIFEST.json',import.meta.url);
+ assert.equal(createHash('sha256').update(readFileSync(backupFile)).digest('hex'),VERIFIED_POLICY_RAW_DIGEST);
+ const base=loadVerifiedPolicy();
+ const temp=mkdtempSync(join(tmpdir(),'stage10-forgery-'));
+ try {
+  const changed=structuredClone(base);
+  changed.services.notes.allowedRoutes.push('GET /api/notes');
+  const changedContent=JSON.stringify(changed,null,2)+'\\n';
+  const altered=join(temp,'policy.json');
+  writeFileSync(altered,changedContent);
+  const manifest=JSON.parse(readFileSync(manifestFile,'utf8'));
+  manifest.files['stage9-safe-policy.json'].sha256=createHash('sha256').update(JSON.stringify(changed)).digest('hex');
+  manifest.files['stage9-safe-policy.json'].rawSha256=createHash('sha256').update(changedContent).digest('hex');
+  const forged=join(temp,'MANIFEST.json');
+  writeFileSync(forged,JSON.stringify(manifest));
+  assert.throws(()=>loadVerifiedPolicy(altered,forged),/VERIFIED_POLICY_MISSING_OR_INVALID/);
+ } finally { rmSync(temp,{recursive:true,force:true}); }
+});
+
 test('missing or forged policy cannot be restored',()=>{
  assert.throws(()=>loadVerifiedPolicy(new URL('../recovery/nonexistent.json',import.meta.url)));
  const temp=mkdtempSync(join(tmpdir(),'aleph10-'));
@@ -163,7 +184,7 @@ test('restore route: only signed B can restore its own one row',async()=>{
  assert.equal((await request('Bearer A')).status,403);
  assert.equal((await request('Bearer B','33333333-3333-4333-8333-333333333333')).status,404);
  assert.equal(audit.length,0);
- const preview=await request('Bearer B',ID,{});
+ const preview=await request('Bearer B',ID,{dryRun:true});
  assert.equal(preview.status,200);
  assert.equal(preview.body.applied,false);
  assert.equal(preview.body.changes.content,true);
@@ -179,6 +200,10 @@ test('restore route: only signed B can restore its own one row',async()=>{
  assert.equal(current.content,backup.content);
  assert.equal(untouched.content,'untouched');
  assert.equal(audit.length,1);
+ const judgeSinglePost=await request('Bearer B',ID,{});
+ assert.equal(judgeSinglePost.status,200);
+ assert.equal(judgeSinglePost.body.restored,true);
+ assert.equal(audit.length,2);
 });
 
 
