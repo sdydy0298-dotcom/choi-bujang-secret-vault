@@ -25,7 +25,10 @@
     "verify:10": "npm run verify:9 && npm run test:10",
     "test:11": "node --test test/step11.test.mjs test/stage11-local-auth.test.mjs test/stage11-judge-enrollment.test.mjs test/stage11-diagnostics.test.mjs",
     "verify:11": "npm run verify:10 && npm run test:11",
-    "prepare:11": "node scripts/prepare-stage11.mjs"
+    "prepare:11": "node scripts/prepare-stage11.mjs",
+    "test:12": "node --test test/step12.test.mjs",
+    "verify:12": "npm run verify:11 && npm run test:12",
+    "prepare:12": "node scripts/prepare-stage12.mjs"
   },
   "engines": {
     "node": ">=22"
