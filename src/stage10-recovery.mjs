@@ -58,6 +58,9 @@ export function verifiedBackup(backup, identity, id) {
       backup.note_id !== id || backup.owner_id !== identity.ownerId ||
       backup.judge_run_id !== identity.runId || backup.judge_identity !== 'b' ||
       !backup.verified_at || !backup.captured_at ||
-      !equalHash(noteContentHash(backup.title, backup.content), backup.content_sha256)) return false;
+      !(backup.sealed_backup_sha256
+        ? equalHash(noteContentHash(backup.title, backup.content), backup.sealed_backup_sha256) &&
+          equalHash(createHash('sha256').update(backup.content, 'utf8').digest('hex'), backup.content_sha256)
+        : equalHash(noteContentHash(backup.title, backup.content), backup.content_sha256))) return false;
   return true;
 }
