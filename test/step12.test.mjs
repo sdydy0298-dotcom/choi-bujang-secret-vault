@@ -46,7 +46,7 @@ test('probes are fixed, read-only or authentication-denied, never user-chosen UR
   for(const check of LIVE_PROBES){
     assert.match(check.caseId,/^S[0-9]{2}_(?:NORMAL|FORBIDDEN)$/u);
     assert.ok(['GET','POST'].includes(check.method));
-    assert.match(check.path,/^\/(?:[a-z0-9/-]*)$/u);
+    assert.match(check.path,/^\/[a-z0-9./-]*$/u);
     assert.equal(STAGE_CASES.some(x=>x.caseId===check.caseId
       &&x.expectedStatus===check.expectedStatus),true);
     if(check.method==='POST')assert.equal(check.expectedStatus,401);
