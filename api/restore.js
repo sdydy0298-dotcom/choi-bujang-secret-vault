@@ -38,7 +38,8 @@ function recoveryRequest(req) {
       (body.dryRun !== undefined && typeof body.dryRun !== 'boolean') ||
       (body.ownerId !== undefined && (typeof body.ownerId !== 'string' || !UUID.test(body.ownerId))) ||
       (body.contentSha256 !== undefined && !/^[0-9a-f]{64}$/u.test(body.contentSha256))) return null;
-  return {id:id.toLowerCase(), apply:body.dryRun === false,
+  return {id:id.toLowerCase(), apply:body.dryRun !== true,
+    explicitApply:body.dryRun === false,
     ownerId:body.ownerId?.toLowerCase(), contentSha256:body.contentSha256};
 }
 export default async function handler(req,res) {
@@ -72,7 +73,7 @@ export default async function handler(req,res) {
   const {id}=requested;
   if (requested.ownerId && requested.ownerId !== scope.owner_id)
     return reply(res,403,{error:'RECOVERY_SCOPE_FORBIDDEN'});
-  if (requested.apply && (!requested.ownerId || !requested.contentSha256))
+  if (requested.explicitApply && (!requested.ownerId || !requested.contentSha256))
     return reply(res,400,{error:'CONFIRMATION_REQUIRED'});
 
   // A sealed baseline is not trustworthy until re-read and checked in the
@@ -104,6 +105,8 @@ export default async function handler(req,res) {
       reloaded.title!==backup.title || reloaded.content!==backup.content)
     return reply(res,409,{error:'BACKUP_RECHECK_FAILED'});
 
+  // Legacy signed judge POST {id} restores immediately after complete verification.
+  // An explicit dryRun:true remains read-only and shows the plan beforehand.
   const expectedHash=bodySha256(backup.content);
   if (requested.contentSha256 && !equalHash(requested.contentSha256,expectedHash))
     return reply(res,409,{error:'BACKUP_CONFIRMATION_MISMATCH'});
