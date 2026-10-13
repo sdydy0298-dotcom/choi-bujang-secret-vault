@@ -6,7 +6,7 @@ const normal = {
   schema: 'aleph.decision.v1', requestId: '00000000-0000-4000-8000-000000000001',
   classId: 'class_fixture', projectId: 'project_fixture',
   subjectId: 'learner_fixture', deviceId: 'aaaaaaaaaaaaaaaa',
-  service: 'notes', method: 'GET', path: '/notes/demo', route: 'GET /notes/:id',
+  service: 'notes', method: 'GET', path: '/notes/demo', route: 'GET /notes/:id', queryLength: 0,
   deviceRegistered: true, signals: {source: 'judge_fixture',region:'local',network:'usual',hour:14},
   recentEvents: [], stepUp: {verified:false,authAgeSeconds:null},
 };
