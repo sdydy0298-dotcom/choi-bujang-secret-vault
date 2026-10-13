@@ -1,4 +1,4 @@
-name: Stage 10 verification
+name: Stage 11 verification
 on:
   push:
     branches: [r5-work]
@@ -19,11 +19,11 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Stage 1-10 regression
-        run: npm run verify:10
+      - name: Stage 1-11 regression
+        run: npm run verify:11
       - name: Build locally
         run: npm run build -- --local
-      - name: Prepare stage 10 submission
-        run: npm run prepare:10
+      - name: Prepare stage 11 submission
+        run: npm run prepare:11
       - name: Bundle submission
         run: npm run bundle
