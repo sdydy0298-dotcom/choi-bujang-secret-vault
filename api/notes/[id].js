@@ -56,6 +56,20 @@ export default async function handler(request, response) {
   // Reject query-selected resources, unknown paths and extra trailing segments.
   const id = idFromPath(request, 'notes');
   if (!id) {
+    // Temporary no-secret diagnosis of Vercel's dynamic route adapter.
+    // Only returns route-shape booleans for a fixed public, nonexistent test UUID.
+    const diagnosticId = '11111111-1111-4111-8111-111111111111';
+    const diagnostic = request.query?.id === diagnosticId ||
+      String(request.url ?? '').includes(diagnosticId);
+    if (diagnostic) {
+      const received = new URL(request.url ?? '/', 'https://resource.invalid');
+      return sendJson(response, 400, { error: 'INVALID_NOTE_ID', routeDiagnostic: {
+        rawPathIsTemplate: received.pathname === '/api/notes/[id]',
+        rawPathHasId: received.pathname.includes(diagnosticId),
+        rawQueryKeys: [...received.searchParams.keys()].sort(),
+        frameworkQueryKeys: Object.keys(request.query ?? {}).sort(),
+      } });
+    }
     return sendJson(response, 400, { error: 'INVALID_NOTE_ID' });
   }
 
