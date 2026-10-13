@@ -1,8 +1,12 @@
 # BYTE BACK 방어전 시작 틀 R5
 
+## 10단계 복구 검증 · 10단계 범위만 적용
+
+- 검증된 정책 사본 `recovery/stage9-safe-policy.json`은 변경하지 않았습니다. 별도 `recovery/MANIFEST.json` 및 **코드 내 독립적인 고정 SHA-256(원본 파일 바이트·JSON 의미 값)** 두 가지를 모두 대조합니다. 사본 또는 목록 누락/변조 시 복구 전에 중단합니다. 통과 저장소는 10단계 최종 커밋까지만 참고했습니다.
+
 ## 10단계 저장점 · 실행 전 확인과 쓰기 직전 재검증
 
-- `POST /api/restore`에 `{id}`를 보내면 쓰기 없는 미리보기입니다. 사본 버전, 정책 버전, 생성/제목/본문 변경 여부와 `confirm`을 반환합니다. 실제 복원은 그 `confirm`을 그대로 POST합니다(`dryRun:false`, `ownerId`, `contentSha256`, `id`). 본문 소유자는 권한 부여용이 아니며 서명된 B의 서버 소유자와 같아야 합니다.
+- `POST /api/restore`에 `{id, dryRun:true}`를 보내면 쓰기 없는 미리보기입니다. 사본 버전과 변경 항목, 확인값(`confirm`)을 보여줍니다. 실제 복원은 `confirm`을 다시 POST합니다. 공식 심판의 기존 단일 요청 `{id}` 역시 **서명된 B만** 사본 검증 및 재검증을 통과한 뒤 한 건을 복구합니다. `dryRun:false`를 명시한 요청은 `ownerId`와 `contentSha256` 확인값이 필수입니다.
 - 실행 요청에서 사본을 다시 두 번 읽고 확인한 ID·소유자·본문 해시를 대조합니다. 불일치이면 RPC 호출 전에 중단합니다. 응답의 camelCase 필드와 기존 snake_case 필드는 같은 값을 나타냅니다.
 - 정책 CLI도 쓰기 직전에 고정 해시 사본을 다시 읽습니다. 사본 버전과 변경 목록을 출력하며, 사본에 없는 추가 정책 키의 삭제도 변경 목록에 표시합니다. 실제 운영 정책은 변경하지 않습니다.
 - 복구 후 HTTP 재시험 5건은 실제 관측만 DB에 기록합니다. A의 서명된 토큰이 필요한 교차 소유권 HTTP 재시험은 `not_run`입니다. 로컬 모의 회귀 성공은 Production 재시험의 성공이 아닙니다.
@@ -31,7 +35,7 @@
 - **이전 저장점**: 9단계 커밋 `d1004397ac47317cfdedddb483a652c1c300f8e2`의 메모 API, 로그인, A/B 소유권, 6~9단계 방어 규칙을 변경하지 않았습니다.
 - **정책 복원**: `recovery/stage9-safe-policy.json`을 고정 SHA-256으로 검증하고, 운영 정책이 아닌 로컬 시험 정책의 `services.notes` 변경 범위만 `npm run policy:10`으로 복구합니다. 타 서비스와 감사 기록은 보존합니다.
 - **비공개 메모 백업**: 침해 **이전 B 메모 생성 시점**에 `defense.note_recovery_backups`에 불변 백업을 남깁니다. 기존 메모를 소급 백업하지 않습니다. 감사 기록은 append-only입니다.
-- **단건 복구**: 서비스 `notes`, **POST `/api/restore`**, 미리보기 본문 `{ "id": "<B 메모 UUID>" }`, 실제 실행은 반환된 `confirm`을 POST합니다. 서버에서 ES256으로 검증된 판정기 B 신원만 받아 DB 소유자·실행 ID·해시를 확인하고 한 건만 원자적으로 복구합니다. B 이외와 백업 없음/손상 시에는 거부합니다.
+- **단건 복구**: 서비스 `notes`, **POST `/api/restore`**, 미리보기 본문 `{ "id": "<B 메모 UUID>", "dryRun": true }`, 명시적 실행은 반환된 `confirm`을 POST합니다. 기존 판정기의 `{id}` 단독 POST도 검증 후 복원합니다. 서버에서 ES256으로 검증된 판정기 B 신원만 받아 DB 소유자·실행 ID·해시를 확인하고 한 건만 원자적으로 복구합니다. B 이외와 백업 없음/손상 시에는 거부합니다.
 - **회귀 확인**: `npm run verify:10` → `npm run build -- --local` → `npm run policy:10 -- preview` → `npm run prepare:10` → `npm run bundle`. 구체적인 사전 설치·복구 뒤 확인 순서는 `docs/STAGE10_RECOVERY.md`에 기록했습니다.
 - **배포 URL**: https://secret-vault-sdydy0298.vercel.app · **저장소**: https://github.com/sdydy0298-dotcom/choi-bujang-secret-vault.
 - **실측 구분**: 로컬 모의 시험과 공식 심판의 변조·삭제·재침공 판정은 별개입니다.
