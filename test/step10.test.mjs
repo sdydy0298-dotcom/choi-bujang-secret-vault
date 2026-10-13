@@ -27,7 +27,7 @@ test('manifest and verified bytes are pinned independently and fail closed',()=>
  try {
   const changed=structuredClone(base);
   changed.services.notes.allowedRoutes.push('GET /api/notes');
-  const changedContent=JSON.stringify(changed,null,2)+'\\n';
+  const changedContent=JSON.stringify(changed,null,2)+'\n';
   const altered=join(temp,'policy.json');
   writeFileSync(altered,changedContent);
   const manifest=JSON.parse(readFileSync(manifestFile,'utf8'));
