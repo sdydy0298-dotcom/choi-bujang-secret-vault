@@ -123,6 +123,12 @@ export default async function handler(req,res) {
   const {error:auditError}=await db.schema('defense').from('note_restore_retests')
     .insert({note_id:id, owner_id:scope.owner_id, judge_run_id:scope.judge_run_id,
       policy_version:preflight.version, checks:report.checks});
+  // Never report a verified recovery when required live retests failed or
+  // their append-only evidence was not persisted.
+  if (auditError || !report.allExecutedPassed || !report.checks?.some(c => c.testId === 'stage10_owner_get_after_restore' && c.outcome === 'pass') ||
+      !report.checks?.some(c => c.testId === 'stage10_anonymous_get_after_restore' && c.outcome === 'pass'))
+    return reply(res,502,{error:'POST_RESTORE_RETEST_INCOMPLETE',
+      checks:report.checks, persisted:!auditError});
 
   return reply(res,200,{restored:true,id,owner_id:scope.owner_id,
     content_sha256:restoredBodyHash,
