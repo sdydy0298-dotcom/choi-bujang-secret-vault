@@ -18,7 +18,7 @@ test('first-party authentication starts logged out and never persists credential
    }
    if(url.endsWith('/logout?scope=global')){
      assert.equal(init.headers.Authorization,'Bearer fixture-token-not-a-secret');
-     return new Response('{}',{status:204});
+     return new Response(null,{status:204});
    }
    throw new Error('unexpected route '+url);
  };
