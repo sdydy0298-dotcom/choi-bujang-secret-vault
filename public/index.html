@@ -263,7 +263,7 @@
         return;
       }
       try {
-        const data = await api('/api/notes');
+        const data = await api('/api/my/notes');
         if (!Array.isArray(data.notes)) throw new Error('자료 형식이 맞지 않습니다.');
         if (!data.notes.length) {
           renderNotesMessage('등록된 가상 메모가 없습니다.');

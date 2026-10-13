@@ -201,3 +201,11 @@ Supabase `defense.notes`는 RLS가 켜져 있습니다. `anon`에는 테이블 C
 기존 판정기는 subjectId가 존재하는지만 확인했으며 누구 소유인지 비교하지 않았습니다. 8단계 보정은 엔진 검증 classId/projectId/subjectId/deviceId/service와 method, 정확한 path를 서버의 자원 소유 허용표와 함께 비교합니다. 다른 등록 기기와 사용자로 같은 메모를 요청하면 거부하고, 본인 자기 메모는 읽기/수정이 허용됩니다. 없는 바인딩은 fail-closed 처리합니다.
 
 class_fixture/project_fixture 예시는 이전 단계에서 제공된 **가상 테스트 전용** 자원입니다. 실제 사용자·메모 연결표는 공식 엔진 또는 운영자가 확인한 값만 서버의 ALEPH_RESOURCE_BINDINGS에 등록해야 하며 Git·브라우저 요청·user_metadata를 출처로 삼지 않습니다. 실제 운영 자원 바인딩과 A/B 시험 토큰이 없으므로 운영 계정 교차 조회 실측은 미실행입니다. 기존 Supabase notes.owner_id 검사와 강사 role 검증 API는 보존합니다. S08_OTHER_ZONE_ALLOWED로 심판이 사용한 비공개 요청은 별도로 확인이 필요하며 가상 테스트 PASS를 심판 판정으로 대체하지 않습니다.
+
+### 8단계 4차 점검 - 공식 계약과 운영 허용표 정리
+
+이전 정책에 직접 작성한 student_A/student_B/student_subject 및 가상 UUID는 실제 엔진이 증명한 소유 관계가 아니었습니다. 운영 판정 기본 허용표에서 모두 제거하고 공식 scripts/fixture-7.mjs의 learner_fixture /notes/demo 한 건만 연습 자원으로 남겼습니다. 엔진 v1에는 Supabase 소유자·강사 역할이 없으므로 다른 운영 사용자는 서버 전용 ALEPH_RESOURCE_BINDINGS에 확인된 classId/projectId/subjectId/deviceId/path/resourceId/ownerSubjectId/methods를 명시적으로 등록해야 허용됩니다. 미등록 자원은 거부합니다.
+
+실제 자료 조회 API는 검증된 Supabase 사용자 ID와 defense.notes.owner_id를 비교하며 강사 공지 수정은 검증된 관리자 메타데이터를 요구합니다. 데이터베이스나 기존 URL은 변경하지 않았습니다. 기존 자료실 목록의 내부 GET 요청은 개인 전용 /api/my/notes로 조정했고 aleph.config.json의 읽기 허용 경로도 동일하게 변경했습니다. 기존 /api/notes API는 소유자 필터를 유지한 채 남겼습니다.
+
+이 수정은 가상 사용자에 실제 권한을 준 명백한 결함을 제거한 것이며, 비공개 S08 심판 판정을 재현했다는 뜻은 아닙니다. 로컬 테스트 통과와 배포 READY만으로 심판 통과를 보장하지 않습니다. 실제 Vercel 요청 로그는 연결 권한 403으로 확인하지 못했습니다.

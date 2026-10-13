@@ -80,34 +80,37 @@ export async function runAttackChecks(config) {
     observed:'미실행: 학생 서버에서는 엔진 재로그인 세션·시각을 실측할 수 없어 심판에 위임',
   };
   if(config.step===8){
-    const A='11111111-1111-4111-8111-111111111111';
-    const req=(method,route,path,subjectId='student_A',deviceId='0123456789abcdef')=>({
-      schema:'aleph.decision.v1',requestId:'stage8-regression',
-      classId:'class_fixture',projectId:'project_fixture',subjectId,deviceId,
-      deviceRegistered:true,service:'notes',method,route,path,
-      queryLength:0,signals:{source:'none'},recentEvents:[]
-    });
-    const own=await decide(req('GET','GET /api/notes/:id','/api/notes/'+A));
-    const ownUpdate=await decide(req('PUT','PUT /api/notes/:id','/api/notes/'+A));
-    const ownList=await decide(req('GET','GET /api/my/notes','/api/my/notes'));
-    const cross=await decide(req('GET','GET /api/notes/:id','/api/notes/'+A,'student_B','fedcba9876543210'));
-    const crossUpdate=await decide(req('PUT','PUT /api/notes/:id','/api/notes/'+A,'student_B','fedcba9876543210'));
-    const allNotes=await decide(req('GET','GET /api/notes','/api/notes'));
-    const unknown=await decide(req('GET','GET /api/notes/:id','/api/notes/export'));
-    const noticeWrite=await decide(req('PUT','PUT /api/notices/:id','/api/notices/'+A));
+    const req={schema:'aleph.decision.v1',requestId:'stage8-practice',
+      classId:'class_fixture',projectId:'project_fixture',
+      subjectId:'learner_fixture',deviceId:'aaaaaaaaaaaaaaaa',
+      deviceRegistered:true,service:'notes',method:'GET',
+      route:'GET /notes/:id',path:'/notes/demo',queryLength:0,
+      signals:{source:'none'},recentEvents:[]};
+    const test=async changes=>(await decide({...req,...changes})).decision;
+    const own=await test({});
+    const ownUpdate=await test({method:'PUT',route:'PUT /notes/:id'});
+    const cross=await test({subjectId:'other_student'});
+    const crossUpdate=await test({subjectId:'other_student',method:'PUT',route:'PUT /notes/:id'});
+    const allNotes=await test({route:'GET /api/notes',path:'/api/notes'});
+    const unboundList=await test({route:'GET /api/my/notes',path:'/api/my/notes'});
+    const unknown=await test({path:'/notes/export'});
+    const noticeWrite=await test({method:'PUT',route:'PUT /api/notices/:id',
+      path:'/api/notices/11111111-1111-4111-8111-111111111111'});
     const notice=await fetch(new URL('/api/notices',app),options);
     const noticeBody=await readJson(notice);
     return [...httpChecks,...fixtures,
-      check('stage8_known_zone_allow','본인 단건 읽기 허용',own.decision==='allow',own.decision),
-      check('stage8_unknown_route_deny','모르는 경로 거부',unknown.decision==='deny',unknown.decision),
-      check('stage8_unauthorized_notices','비로그인 공지 API 거부',[401,403].includes(notice.status)&&!!noticeBody?.error,'HTTP '+notice.status),
-      check('stage8_all_notes_denied','전체 메모 목록 거부',allNotes.decision==='deny',allNotes.decision),
-      check('stage8_notes_write_denied','타인 메모 수정 거부',crossUpdate.decision==='deny',crossUpdate.decision),
-      check('stage8_student_notice_write_denied','학생 공지 수정 거부',noticeWrite.decision==='deny',noticeWrite.decision),
-      check('stage8_own_note_update_allow','본인 메모 수정 허용',ownUpdate.decision==='allow',ownUpdate.decision),
-      check('stage8_cross_owner_read_denied','타인 단건 메모 거부',cross.decision==='deny',cross.decision),
-      check('stage8_own_list_allow','본인 범위 목록 허용',ownList.decision==='allow',ownList.decision),
-      {attackId:'stage8_live_cross_owner',expected:'실제 A/B 계정 직접 메모 교차 요청',observed:'미실행: 실제 운영 계정 토큰은 심판/학생 직접 시험에 위임'}
+      check('stage8_known_zone_allow','공식 가상 자기 메모 GET 허용',own==='allow',own),
+      check('stage8_unknown_route_deny','export 기능 경로 거부',unknown==='deny',unknown),
+      check('stage8_unauthorized_notices','비로그인 공지 API 거부',
+        [401,403].includes(notice.status)&&!!noticeBody?.error,'HTTP '+notice.status),
+      check('stage8_all_notes_denied','전체 목록 거부',allNotes==='deny',allNotes),
+      check('stage8_notes_write_denied','타인 메모 수정 거부',crossUpdate==='deny',crossUpdate),
+      check('stage8_student_notice_write_denied','학생 공지 수정 거부',noticeWrite==='deny',noticeWrite),
+      check('stage8_own_note_update_allow','공식 가상 본인 PUT 허용',ownUpdate==='allow',ownUpdate),
+      check('stage8_cross_owner_read_denied','타인 단건 GET 거부',cross==='deny',cross),
+      check('stage8_unmapped_list_denied','소유자 미등록 목록 거부',unboundList==='deny',unboundList),
+      {attackId:'stage8_live_cross_owner',expected:'실제 A/B 사용자 간 메모 API 요청 확인',
+       observed:'미실행: 심판 비공개 요청과 실제 운영 사용자 소유 관계 확인이 필요'}
     ];
   }
   return [...httpChecks, ...fixtures, live];

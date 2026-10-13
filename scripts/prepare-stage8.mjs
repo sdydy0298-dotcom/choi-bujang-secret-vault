@@ -12,6 +12,7 @@ if(!/(기기|등록|device)/iu.test(String(notes.explanation||''))) {
   notes.explanation += '\n6단계 기기 등록 규칙(device_registered)을 유지했습니다.';
 }
 if(!String(notes.explanation||'').includes('자원 소유자 연결표')) notes.explanation += '\n8단계 재보정: 기기·주체·반·프로젝트와 소유 메모 경로를 서버 자원 소유자 연결표로 재검사했습니다. 가상 예제는 실제 운영 권한이 아닙니다.';
+if(!String(notes.explanation||'').includes('가상 A/B 제거')) notes.explanation += '\n8단계 추가 보정: 가상 A/B 제거. 공식 시작 틀 요청만 기본 가상 허용하며, 미등록 소유 자료는 거부합니다. 목록 API는 본인 전용 경로로 연결했습니다.';
 notes.blockedAt='실제 A/B 교차 요청과 강사 계정의 공지 작성·수정은 운영 시험 계정 권한이 준비되지 않아 미실행; 일반 학생의 공지 쓰기는 차단합니다.';
 writeFileSync(file,JSON.stringify(notes,null,2)+'\n');
 process.stdout.write('8단계 로컬 제출 설명 생성(기존 다른 키 보존).\n');

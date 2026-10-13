@@ -5,8 +5,8 @@ import { runAttackChecks } from '../src/attack-check.mjs';
 
 const validRequest = Object.freeze({
   schema:'aleph.decision.v1', requestId:'00000000-0000-4000-8000-000000000000',
-  classId:'class_fixture', projectId:'project_fixture', subjectId:'student_subject', deviceId:'0123456789abcdef', deviceRegistered:true,
-  service:'notes', method:'GET', path:'/notes/123', route:'GET /notes/:id',
+  classId:'class_fixture', projectId:'project_fixture', subjectId:'learner_fixture', deviceId:'aaaaaaaaaaaaaaaa', deviceRegistered:true,
+  service:'notes', method:'GET', path:'/notes/demo', route:'GET /notes/:id', queryLength:0,
 });
 const assertDecision = async (changes, expected, reason) => {
   const input={...validRequest,...changes};
@@ -20,7 +20,7 @@ const assertDecision = async (changes, expected, reason) => {
 
 test('등록된 정상 읽기만 허용',async()=>{
   await assertDecision({},'allow','approved');
-  await assertDecision({route:'GET /notes',path:'/notes'},'allow','approved');
+  await assertDecision({route:'GET /notes/:id',path:'/notes/demo'},'allow','approved');
 });
 test('미등록·확인 불충분은 fail closed',async()=>{
   for(const changes of [
