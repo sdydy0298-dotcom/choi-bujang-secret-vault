@@ -1,4 +1,5 @@
 import { requireApprovedDevice } from '../../src/device-approval.mjs';
+import { recordStage11, traceActor } from '../../src/stage11-diagnostics.mjs';
 import { createClient } from '@supabase/supabase-js';
 import config from '../../aleph.config.json' with { type: 'json' };
 import { resourceId, idFromPath } from '../../src/resource-zones.mjs';
@@ -48,6 +49,7 @@ async function verifiedIdentity(request, secret) {
 }
 
 export default async function handler(request, response) {
+  await recordStage11('notes_enter',{route:'notes'});
   if (!['GET', 'PUT', 'DELETE'].includes(request.method)) {
     response.setHeader('Allow', 'GET, PUT, DELETE');
     return sendJson(response, 405, { error: 'METHOD_NOT_ALLOWED' });
@@ -71,12 +73,21 @@ export default async function handler(request, response) {
   } catch {
     return sendJson(response, 503, { error: 'LOGIN_VERIFIER_NOT_CONFIGURED' });
   }
-  if (!identity) return unauthorized(response);
+  if (!identity) {
+    await recordStage11('notes_auth_rejected',{route:'notes',actor:'anonymous',statusCode:401});
+    return unauthorized(response);
+  }
+  const actor=traceActor(identity);
+  await recordStage11('notes_identity_verified',{route:'notes',actor});
   if (!getNoteScope(identity)) return sendJson(response, 403, { error: 'NOTE_SCOPE_NOT_ALLOWED' });
 
   const supabase = serverClient(supabaseUrl, supabaseSecretKey);
   const device = await requireApprovedDevice(request, identity, supabase);
-  if (!device.ok) return sendJson(response, device.status, { error: device.error });
+  if (!device.ok) {
+    await recordStage11('notes_device_rejected',{route:'notes',actor,statusCode:device.status});
+    return sendJson(response, device.status, { error: device.error });
+  }
+  await recordStage11('notes_device_verified',{route:'notes',actor,statusCode:200});
 
   if (request.method === 'GET') {
     const { data, error } = await scopedNoteQuery(supabase
