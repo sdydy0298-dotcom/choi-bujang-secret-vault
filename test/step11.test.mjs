@@ -4,6 +4,7 @@ import { generateKeyPairSync, sign, randomBytes, createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs';
 import { requireApprovedDevice, requestBodyDigest, signedRequestMessage, verifyBoundSignature } from '../src/device-approval.mjs';
 import { getNoteScope } from '../src/note-scope.mjs';
+import { idFromPath } from '../src/resource-zones.mjs';
 
 const userId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const identity={kind:'student',userId};
@@ -104,4 +105,27 @@ test('existing protected APIs all invoke approval verification before opening ro
    const content=readFileSync(new URL(file,import.meta.url),'utf8');
    assert.match(content,/requireApprovedDevice\(/u,file);
  }
+});
+
+test('production Vercel dynamic route id is canonicalized without losing path and query protection',async()=>{
+  const target='/api/notes/'+deviceId;
+  const signed=signedRequest('GET',target,null);
+  const adapter={...signed,url:target+'?id='+deviceId};
+  assert.equal(idFromPath(adapter,'notes'),deviceId);
+  assert.equal((await requireApprovedDevice(adapter,identity,fakeDb())).ok,true);
+
+  const unrelated='22222222-2222-4222-8222-222222222222';
+  assert.equal(idFromPath({...adapter,url:target+'?id='+unrelated},'notes'),null);
+  assert.equal(idFromPath({...adapter,url:target+'?owner_id='+deviceId},'notes'),null);
+  assert.equal(idFromPath({...adapter,url:target+'?id='+deviceId+'&role=admin'},'notes'),null);
+  assert.equal(idFromPath({...adapter,url:target+'?id='+deviceId+'&id='+deviceId},'notes'),null);
+  assert.equal(idFromPath({...adapter,url:'/api/notes/'+deviceId+'/export?id='+deviceId},'notes'),null);
+  assert.equal(idFromPath({...adapter,url:'/api/notices/'+deviceId+'?id='+deviceId},'notices'),deviceId);
+
+  const badSignature={...adapter,url:target+'?id='+deviceId+'&role=admin'};
+  assert.equal((await requireApprovedDevice(badSignature,identity,fakeDb())).error,
+    'DEVICE_SIGNATURE_INVALID');
+  const forgedId={...adapter,url:target+'?id='+unrelated};
+  assert.equal((await requireApprovedDevice(forgedId,identity,fakeDb())).error,
+    'DEVICE_SIGNATURE_INVALID');
 });
