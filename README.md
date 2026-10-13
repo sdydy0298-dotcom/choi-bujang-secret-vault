@@ -27,6 +27,13 @@ npm run bundle
 
 Production 배포는 Vercel에서 `npm run verify:12 && npm run build`로 검증합니다. 공개 `/aleph.json`의 `step=12`, `repoUrl`, `commit`과 `git rev-parse HEAD`를 대조해야 합니다. 그다음 Git에서 무시되는 `artifacts/submission.json`만 판정 사이트에 제출합니다. **비밀번호·JWT·개인키·Supabase 시크릿을 제출하거나 Git에 올리지 않습니다.** 운영 엔진 실행·회수 중지는 학생 프로젝트에서 임의로 수행하지 않으며, 기기와 앱의 중지/원복은 [운영 안내](docs/STAGE12_OPERATIONS.md)에 명시합니다.
 
+### 저장점 검증 기준
+
+1. `npm install`과 `npm run verify:12`는 GitHub Actions의 새 Ubuntu 환경에서 직접 실행합니다.
+2. `npm run bundle`은 **GitHub 저장점 커밋과 Production의 `/aleph.json` 커밋이 같을 때만** 실행하며, 결과에 가상 테스트와 실측 HTTP 결과를 구별합니다.
+3. 41종 공식 공격, 운영 엔진 탐지·회수 및 기기/복구 연속 공격은 **실제 판정이 나올 때까지 미실행**으로 유지합니다.
+4. 현재 작업의 다른 파일을 훼손하지 않고, 실제 보안 상태가 확인되지 않은 항목을 PASS로 바꾸지 않습니다.
+
 ### 100점 가산 요건 자체 점검
 
 - `npm install`은 새 저장소에서 실제 실행해 오류 없는지를 검증합니다. 명령만 적었다고 PASS로 선언하지 않습니다.
