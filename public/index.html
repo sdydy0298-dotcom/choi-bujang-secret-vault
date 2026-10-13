@@ -117,14 +117,13 @@
   </main>
 
   <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/+esm';
+    import { createClient } from '/auth-client.js';
 
     const authConfigResponse = await fetch('/api/auth-config', { cache: 'no-store' });
     if (!authConfigResponse.ok) throw new Error('인증 설정을 불러올 수 없습니다.');
     const authConfig = await authConfigResponse.json();
-    const supabase = createClient(authConfig.url, authConfig.publishableKey, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
-    });
+    // Login and refresh state stay in memory only. Nothing is persisted in browser storage.
+    const supabase = createClient(authConfig.url, authConfig.publishableKey);
 
     const loginForm = document.querySelector('#login-form');
     const emailInput = document.querySelector('#email');
