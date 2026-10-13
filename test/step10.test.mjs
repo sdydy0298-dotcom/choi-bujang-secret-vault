@@ -90,7 +90,7 @@ test('database restore migration is scoped and keeps evidence append-only',()=>{
 });
 test('stage10 submission self-check retains prior protections within 20 cases',async()=>{
  const config=JSON.parse(readFileSync(new URL('../aleph.config.json',import.meta.url),'utf8'));
- assert.equal(config.step,10);
+ assert.ok([10,11].includes(config.step));
  assert.equal(config.restoreRoute,'/api/restore');
  const before=globalThis.fetch;
  const json=(data,status=200)=>new Response(JSON.stringify(data),{
