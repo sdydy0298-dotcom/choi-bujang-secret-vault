@@ -26,9 +26,11 @@ export default async function handler(req,res) {
     identity = await verifyLogin(req.headers?.authorization);
   } catch { return respond(res,503,{error:'LOGIN_VERIFIER_UNAVAILABLE'}); }
   if (!identity) return respond(res,401,{error:'UNAUTHORIZED'});
-  // Enrollment is a student-only workflow. Signed judge accounts cannot silently
-  // approve their own devices or acquire a registration through judge traffic.
-  if (identity.kind !== 'student') return respond(res,403,{error:'DEVICE_REGISTRATION_FORBIDDEN'});
+  // Both independently verified identity kinds may request a PENDING device.
+  // Judge A/B each get a distinct, run-bound owner scope. No authenticated
+  // caller (including a judge) may approve their own request through this API.
+  if (identity.kind !== 'student' && identity.kind !== 'judge')
+    return respond(res,403,{error:'DEVICE_REGISTRATION_FORBIDDEN'});
   const scope = getNoteScope(identity);
   if (!scope) return respond(res,403,{error:'DEVICE_REGISTRATION_FORBIDDEN'});
   const db = createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SECRET_KEY,{
