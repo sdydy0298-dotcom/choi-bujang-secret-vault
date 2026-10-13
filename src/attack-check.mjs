@@ -55,7 +55,7 @@ export async function runAttackChecks(config) {
     check('static_notes_empty', '공개 data.json의 메모는 0건임',
       staticEmpty, 'HTTP ' + data.status + ', 메모 ' + (staticEmpty ? '0건' : '확인 불가')),
     check('deployment_identity_available', `${config.step}단계·저장소·커밋·허용 경로·원본 API가 배포 식별 정보와 일치`,
-      identityOk, 'HTTP ' + identity.status + ', 6단계 배포 식별 ' + (identityOk ? '일치' : '불일치')),
+      identityOk, 'HTTP ' + identity.status + ', ' + config.step + '단계 배포 식별 ' + (identityOk ? '일치' : '불일치')),
     check('main_security_header', '자료실 첫 화면이 정상 HTML과 보안 헤더를 반환함',
       pageOk, 'HTTP ' + page.status + ', 실제 자료실/보안 헤더 ' + (pageOk ? '확인' : '확인 불가')),
     check('auth_config_available', '기존 브라우저 인증 설정 API가 정상 응답함',
