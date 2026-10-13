@@ -87,7 +87,7 @@ try {
   if (new Set(attackAttempts.map(item => item.attackId)).size !== attackAttempts.length) {
     fail('공격 점검 ID가 중복되었습니다.');
   }
-  if ([6, 7, 8, 9, 10, 11].includes(config.step)) {
+  if ([6, 7, 8, 9, 10, 11, 12].includes(config.step)) {
     const required = ['anonymous_notes_rejected', 'static_notes_empty',
       'deployment_identity_available', 'main_security_header', 'auth_config_available'];
     for (const id of required) {
@@ -100,7 +100,7 @@ try {
     if (!/(기기|등록|device)/iu.test(notes.explanation)) {
       fail('bundle-notes.json의 explanation에 기기 규칙 설명을 작성해 주세요.');
     }
-    if ([7, 8, 9, 10, 11].includes(config.step)) {
+    if ([7, 8, 9, 10, 11, 12].includes(config.step)) {
       const fixtureIds = ['stage7_normal_allow', 'stage7_unregistered_deny',
         'stage7_composite_step_up', 'stage7_reverified_allow'];
       for (const id of fixtureIds) {
