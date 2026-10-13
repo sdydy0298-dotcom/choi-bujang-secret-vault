@@ -1,7 +1,10 @@
 name: Stage 11 isolate external CDN dependency
 on:
   push:
+    branches: [r5-work]
     paths:
+      - public/index.html
+      - public/auth-client.js
       - .github/workflows/stage11-cdn-isolation.yml
   workflow_dispatch:
 permissions:
@@ -20,12 +23,11 @@ jobs:
           timeout 45s google-chrome --headless=new --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-extensions --user-data-dir="$chrome_profile" '--host-resolver-rules=MAP cdn.jsdelivr.net ~NOTFOUND' --virtual-time-budget=10000 --dump-dom 'https://secret-vault-sdydy0298.vercel.app/' >/tmp/isolated-dom.html 2>/tmp/isolated-console.log || true
           grep -oE '<span id="auth-state" class="state">[^<]*</span>' /tmp/isolated-dom.html | head -1 || true
           grep -Ei 'jsdelivr|ERR_|Failed to fetch|Could not resolve' /tmp/isolated-console.log | head -12 || true
-          if grep -q '<span id="auth-state" class="state">확인 중</span>' /tmp/isolated-dom.html; then
-            echo 'CONFIRMED: auth initialization stalls when external CDN is unreachable.'
-          elif grep -q '<span id="auth-state" class="state">로그아웃됨</span>' /tmp/isolated-dom.html; then
-            echo 'EXTERNAL CDN not required for initial auth state in this Chrome experiment.'
+          if grep -q '<span id="auth-state" class="state">로그아웃됨</span>' /tmp/isolated-dom.html; then
+            echo 'PASS: auth initializes using first-party module when third-party CDN is unavailable.'
           else
-            echo 'UNEXPECTED auth initialization state; inspect the earlier logs.'
+            echo 'FAIL: login screen cannot finish initialization without third-party CDN.'
+            grep -iE 'error|failed|net::|uncaught|exception' /tmp/isolated-console.log | head -20 || true
             exit 1
           fi
           rm -rf "$chrome_profile"
