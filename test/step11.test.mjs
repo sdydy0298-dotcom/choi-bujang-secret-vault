@@ -81,8 +81,11 @@ test('approved signature works once; changing target or body fails before a repl
 });
 test('stage 11 UI shows no materials pending approval and persists no JS secrets',()=>{
  const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
- assert.match(html,/persistSession:\s*false/u);
- assert.match(html,/autoRefreshToken:\s*false/u);
+ assert.match(html,/import \{ createClient \} from '\/auth-client\.js'/u);
+ assert.doesNotMatch(html,/cdn\.jsdelivr\.net/u);
+ const authClient=readFileSync(new URL('../public/auth-client.js',import.meta.url),'utf8');
+ assert.doesNotMatch(authClient,/\b(?:localStorage|sessionStorage|indexedDB)\s*[.\[]/u);
+ assert.match(authClient,/credentials:'omit'/u);
  assert.match(html,/crypto\.subtle\.generateKey/u);
  assert.match(html,/crypto\.subtle\.sign/u);
  assert.match(html,/device-panel/u);
