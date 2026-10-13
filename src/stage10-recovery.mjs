@@ -26,11 +26,17 @@ export function loadVerifiedPolicy(file = new URL('../recovery/stage9-safe-polic
   }
   return policy;
 }
+export function reloadVerifiedPolicy(first, loader = loadVerifiedPolicy) {
+  const second = loader();
+  if (JSON.stringify(first) !== JSON.stringify(second))
+    throw new Error('VERIFIED_POLICY_CHANGED_BEFORE_WRITE');
+  return second;
+}
 export function policyDiff(current, policy) {
   if (!current || typeof current !== 'object' || !current.services ||
       !current.services.notes || !policy?.services?.notes) throw new TypeError('invalid_test_policy');
   const before = current.services.notes, after = policy.services.notes;
-  return Object.keys(after).filter(k => JSON.stringify(before[k]) !== JSON.stringify(after[k]))
+  return [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(k => JSON.stringify(before[k]) !== JSON.stringify(after[k]))
     .map(k => ({ field: 'services.notes.'+k, from: before[k] ?? null, to: after[k] }));
 }
 export function restoreTestPolicy(current, verifiedPolicy) {

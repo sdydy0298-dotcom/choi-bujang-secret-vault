@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { STAGE9_SAFE_COMMIT, VERIFIED_POLICY_DIGEST, noteContentHash, equalHash,
-  loadVerifiedPolicy, policyDiff, restoreTestPolicy, verifiedBackup }
+  loadVerifiedPolicy, reloadVerifiedPolicy, policyDiff, restoreTestPolicy, verifiedBackup }
   from '../src/stage10-recovery.mjs';
 import { runAttackChecks } from '../src/attack-check.mjs';
 const ID='11111111-1111-4111-8111-111111111111';
@@ -151,9 +151,9 @@ test('restore route: only signed B can restore its own one row',async()=>{
  {testId:'stage10_anonymous_get_after_restore',outcome:'pass'}],allExecutedPassed:true,unexecuted:[]}),
  body=>createHash('sha256').update(body,'utf8').digest('hex'),{},{
   env:{SUPABASE_URL:'https://mock.invalid',SUPABASE_SECRET_KEY:'test-only-secret'}});
- async function request(header,id=ID){
+ async function request(header,id=ID,extra={dryRun:false,ownerId:OWNER,contentSha256:createHash('sha256').update(backup.content).digest('hex')}){
   return new Promise((resolve,reject)=>{
-   const req={method:'POST',url:'/api/restore',headers:{authorization:header},body:{id}};
+   const req={method:'POST',url:'/api/restore',headers:{authorization:header},body:{id,...extra}};
    const res={setHeader(){},status(status){this.code=status;return this;},
     json(body){resolve({status:this.code,body});}};
    Promise.resolve(h(req,res)).catch(reject);
@@ -163,7 +163,15 @@ test('restore route: only signed B can restore its own one row',async()=>{
  assert.equal((await request('Bearer A')).status,403);
  assert.equal((await request('Bearer B','33333333-3333-4333-8333-333333333333')).status,404);
  assert.equal(audit.length,0);
- const restored=await request('Bearer B');
+ const preview=await request('Bearer B',ID,{});
+ assert.equal(preview.status,200);
+ assert.equal(preview.body.applied,false);
+ assert.equal(preview.body.changes.content,true);
+ assert.equal(audit.length,0);
+ const mismatch=await request('Bearer B',ID,{...preview.body.confirm,contentSha256:'0'.repeat(64)});
+ assert.equal(mismatch.status,409);
+ assert.equal(audit.length,0);
+ const restored=await request('Bearer B',ID,preview.body.confirm);
  assert.equal(restored.status,200);
  assert.ok(equalHash(restored.body.sealed_backup_sha256,backup.sealed_backup_sha256));
  assert.equal(restored.body.content_sha256,
@@ -171,4 +179,16 @@ test('restore route: only signed B can restore its own one row',async()=>{
  assert.equal(current.content,backup.content);
  assert.equal(untouched.content,'untouched');
  assert.equal(audit.length,1);
+});
+
+
+test('policy is reread immediately before writing and changed snapshot is rejected', () => {
+ const first=loadVerifiedPolicy();
+ let reads=0;
+ assert.deepEqual(reloadVerifiedPolicy(first,()=>{reads++;return loadVerifiedPolicy();}),first);
+ assert.equal(reads,1);
+ assert.throws(()=>reloadVerifiedPolicy(first,()=>({...first,version:'changed'})),/CHANGED_BEFORE_WRITE/);
+ assert.throws(()=>reloadVerifiedPolicy(first,()=>{throw Error('missing')}),/missing/);
+ const current={services:{notes:{...first.services.notes,injectedAllow:true}}};
+ assert.ok(policyDiff(current,first).some(x=>x.field==='services.notes.injectedAllow'));
 });

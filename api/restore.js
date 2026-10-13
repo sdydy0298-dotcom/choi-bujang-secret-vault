@@ -18,11 +18,11 @@ let verify;
 function reply(res, status, data) {
   // Fixed fields only: never log authorization, request body, IDs or note data.
   console.info(JSON.stringify({ event: 'stage10_restore_result', status,
-    code: typeof data.error === 'string' ? data.error : 'RESTORED' }));
+    code: typeof data.error === 'string' ? data.error : data.applied === false ? 'PREVIEW' : 'RESTORED' }));
   for (const [k, v] of Object.entries(HEADERS)) res.setHeader(k,v);
   return res.status(status).json(data);
 }
-function targetId(req) {
+function recoveryRequest(req) {
   let url;
   try { url = new URL(req.url ?? '/api/restore', 'https://resource.invalid'); }
   catch { return null; }
@@ -31,9 +31,15 @@ function targetId(req) {
   if (typeof body === 'string') { try { body=JSON.parse(body); } catch {return null;} }
   if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
   const keys=Object.keys(body);
-  if (keys.length !== 1 || !['id','noteId'].includes(keys[0])) return null;
-  const id=body[keys[0]];
-  return typeof id === 'string' && UUID.test(id) ? id.toLowerCase() : null;
+  if (keys.some(k => !['id','noteId','dryRun','ownerId','contentSha256'].includes(k))) return null;
+  const id=body.id ?? body.noteId;
+  if (typeof id !== 'string' || !UUID.test(id) ||
+      (body.id !== undefined && body.noteId !== undefined && body.id !== body.noteId) ||
+      (body.dryRun !== undefined && typeof body.dryRun !== 'boolean') ||
+      (body.ownerId !== undefined && (typeof body.ownerId !== 'string' || !UUID.test(body.ownerId))) ||
+      (body.contentSha256 !== undefined && !/^[0-9a-f]{64}$/u.test(body.contentSha256))) return null;
+  return {id:id.toLowerCase(), apply:body.dryRun === false,
+    ownerId:body.ownerId?.toLowerCase(), contentSha256:body.contentSha256};
 }
 export default async function handler(req,res) {
   if (req.method !== 'POST') {
@@ -60,8 +66,14 @@ export default async function handler(req,res) {
   const scope=getNoteScope(identity);
   if (!scope || scope.judge_identity !== 'b' || !scope.judge_run_id)
     return reply(res,403,{error:'RECOVERY_SCOPE_FORBIDDEN'});
-  const id=targetId(req);
-  if (!id) return reply(res,400,{error:'INVALID_RECOVERY_TARGET'});
+  const requested=recoveryRequest(req);
+  if (!requested) return reply(res,400,{error:'INVALID_RECOVERY_TARGET'});
+
+  const {id}=requested;
+  if (requested.ownerId && requested.ownerId !== scope.owner_id)
+    return reply(res,403,{error:'RECOVERY_SCOPE_FORBIDDEN'});
+  if (requested.apply && (!requested.ownerId || !requested.contentSha256))
+    return reply(res,400,{error:'CONFIRMATION_REQUIRED'});
 
   // A sealed baseline is not trustworthy until re-read and checked in the
   // *real* restore request. Fail closed BEFORE modifying anything in DB.
@@ -91,6 +103,23 @@ export default async function handler(req,res) {
       (backup.sealed_backup_sha256 && !equalHash(reloaded.sealed_backup_sha256,backup.sealed_backup_sha256)) ||
       reloaded.title!==backup.title || reloaded.content!==backup.content)
     return reply(res,409,{error:'BACKUP_RECHECK_FAILED'});
+
+  const expectedHash=bodySha256(backup.content);
+  if (requested.contentSha256 && !equalHash(requested.contentSha256,expectedHash))
+    return reply(res,409,{error:'BACKUP_CONFIRMATION_MISMATCH'});
+  if (!requested.apply) {
+    const {data:live,error:liveError}=await db.schema('defense').from('notes')
+      .select('id,owner_id,judge_run_id,judge_identity,title,content')
+      .eq('id',id).eq('owner_id',scope.owner_id)
+      .eq('judge_run_id',scope.judge_run_id).eq('judge_identity','b').maybeSingle();
+    if (liveError) return reply(res,502,{error:'RECOVERY_DATA_UNAVAILABLE'});
+    return reply(res,200,{applied:false,dryRun:true,id,ownerId:scope.owner_id,
+      contentSha256:expectedHash,
+      backup:{verified:true,version:backup.captured_at,policyVersion:preflight.version},
+      changes:{create:!live,title:!live || live.title!==backup.title,
+        content:!live || live.content!==backup.content},
+      confirm:{id,dryRun:false,ownerId:scope.owner_id,contentSha256:expectedHash}});
+  }
 
   // All-or-nothing stored procedure validates immutable backup, bound owner
   // and run again, then restores one row and appends an audit event.
@@ -133,7 +162,7 @@ export default async function handler(req,res) {
     return reply(res,502,{error:'POST_RESTORE_RETEST_INCOMPLETE',
       checks:report.checks, persisted:!auditError});
 
-  return reply(res,200,{restored:true,id,owner_id:scope.owner_id,
+  return reply(res,200,{applied:true,restored:true,id,ownerId:scope.owner_id,contentSha256:restoredBodyHash,owner_id:scope.owner_id,
     content_sha256:restoredBodyHash,
     sealed_backup_sha256:backup.sealed_backup_sha256 ?? backup.content_sha256,
     operation:outcome.operation,
@@ -142,6 +171,7 @@ export default async function handler(req,res) {
       baselineCommit:preflight.baseCommit, changedFields:preflight.changedFields
     },
     postRestoreRetests:{
+      checkedAt:report.checkedAt,
       checks:report.checks,
       allExecutedPassed:report.allExecutedPassed,
       unexecuted:report.unexecuted,

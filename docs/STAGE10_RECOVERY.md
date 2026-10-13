@@ -78,3 +78,13 @@ npm run bundle
 DB 검증은 하나의 트랜잭션에서 `BEGIN`, 복구 SQL, `test/stage10-database.sql`, `ROLLBACK` 순서로 실행합니다. 시험 실패 시에도 반드시 ROLLBACK합니다. 이 시험은 실제 HTTP 재시험을 대체하지 않습니다.
 
 실제 복구 요청의 서버 로그 이벤트는 `stage10_restore_result`입니다. `code`로 인증/백업/복원/재시험 중 중단 지점을 확인합니다. `RECOVERY_REJECTED`이면 재시험은 아직 실행되지 않았으며, `POST_RESTORE_RETEST_INCOMPLETE`이면 HTTP 관측 또는 기록 저장이 실패했습니다.
+
+### 실행 전 미리보기와 확인 (현재 API)
+
+1. 서명된 B로 `POST /api/restore`, `{ "id": "<B 메모 UUID>" }`를 보냅니다.
+2. `applied:false`와 `backup.version`, `changes`를 확인합니다. 이 요청은 복원이나 재시험을 실행하지 않습니다.
+3. 응답의 `confirm` 객체를 동일 경로에 POST합니다. 소유자/해시가 사본과 다르면 중단합니다.
+4. 실제 복원 후 단건 B GET(200 및 해시), 익명 단건 GET(401), B 목록 GET(200), 익명 목록 GET(401), 익명 전체 GET(401)을 순서대로 실행하고 DB에 기록합니다. 응답의 `postRestoreRetests`를 확인합니다.
+5. A 서명 토큰이 없는 교차 소유권 검사는 `not_run`으로 남깁니다. 6~9단계 판정기 회귀는 `npm run verify:10`의 로컬 시험이며 실제 배포 요청의 기록으로 혼동하지 않습니다.
+
+기존 문서의 `{id}` 단독 실행 설명보다 이 절차가 우선합니다. 기본 동작은 미리보기입니다.
