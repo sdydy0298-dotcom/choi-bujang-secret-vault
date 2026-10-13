@@ -145,7 +145,8 @@ test('restore route: only signed B can restore its own one row',async()=>{
  },()=>({owner_id:OWNER,judge_run_id:RUN,judge_identity:'b'}),
  equalHash,noteContentHash,verifiedBackup,
  ()=>({verified:true,version:'stage9-d1004397',baseCommit:STAGE9_SAFE_COMMIT,changedFields:[]}),
- async()=>({checks:[],allExecutedPassed:true,unexecuted:[]}),
+ async()=>({checks:[{testId:'stage10_owner_get_after_restore',outcome:'pass'},
+ {testId:'stage10_anonymous_get_after_restore',outcome:'pass'}],allExecutedPassed:true,unexecuted:[]}),
  body=>createHash('sha256').update(body,'utf8').digest('hex'),{},{
   env:{SUPABASE_URL:'https://mock.invalid',SUPABASE_SECRET_KEY:'test-only-secret'}});
  async function request(header,id=ID){
