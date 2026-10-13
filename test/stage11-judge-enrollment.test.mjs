@@ -43,11 +43,12 @@ function setup(){
     .replace(/^import[^\n]+\n/gmu,'')
     .replace('export default async function handler','async function handler');
   const factory=new Function('randomUUID','createClient','config','createLoginVerifier',
-    'getNoteScope','validPublicKey','process',raw+'\nreturn handler;');
+    'getNoteScope','validPublicKey','process','recordStage11','traceActor',raw+'\nreturn handler;');
   const handler=factory(()=>ids[idIndex++],()=>db,{},
     ()=>async authorization=>fixtures[authorization]??null,
     getNoteScope,value=>value?.kty==='EC'&&value.crv==='P-256',
-    {env:{SUPABASE_URL:'https://example.invalid',SUPABASE_SECRET_KEY:'fixture-not-real'}});
+    {env:{SUPABASE_URL:'https://example.invalid',SUPABASE_SECRET_KEY:'fixture-not-real'}},
+    async()=>true,identity=>identity?.kind==='judge'?'judge_'+identity.identity:'student');
   async function request(token,method,url,body){
     return new Promise((resolve,reject)=>{
       const req={method,url,headers:{authorization:token},body};
