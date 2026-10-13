@@ -1,5 +1,40 @@
 # BYTE BACK 방어전 시작 틀 R5
 
+## 12단계 저장점 · 탈환 작전실 (2026-10-13)
+
+**현재 단계:** `aleph.config.json: step=12` · **브랜치:** `r5-work` · **공개 배포:** https://secret-vault-sdydy0298.vercel.app · **GitHub:** https://github.com/sdydy0298-dotcom/choi-bujang-secret-vault
+
+- **제작 1:** 로그인하고 서버에서 승인된 기기만 작전실의 `GET /api/operations`으로 실제 비공개 서버 기록을 읽습니다. `src/decider.mjs` 규칙 수, 탐지 실측 미연결, 기기 승인·회수 건수, `recovery/MANIFEST.json` 정책 버전과 DB 복구 감사 건수를 구별해 표시합니다. 메모 본문·키·토큰은 표시하거나 포장하지 않습니다.
+- **제작 2:** 1~11단계 정상·금지 체크리스트 22행에 **기대 결과·실제 HTTP·서버 발급 요청 ID·확인 시각**을 나란히 표시합니다. 공개 정상 3건·무인증 금지 5건은 보호된 POST 작전실 API를 통해 실제 HTTP 응답을 받아 증거를 남길 수 있고, 증거가 없으면 미실행으로 남습니다. **심판의 41종 공격은 모두 공식 실측 미확인(`not_run`)**이며 가상 시험 PASS로 대체하지 않습니다.
+- **제작 3:** 학생 판정기·탐지 규칙·자료실/PWA와 제공 **ALEPH SDP 엔진**의 역할을 분리했습니다. 설치, 실행, 중지, 복구, 검증한 커밋 및 자료 보존 절차는 [12단계 운영 가이드](docs/STAGE12_OPERATIONS.md)를 따릅니다.
+- **기존 보호 유지:** 이전 1~11단계의 로그인·소유권·공지 구역·기기 서명·탐지 규칙·복구 경로는 보존합니다. 12단계 HTTP 증거는 새 비공개 `defense.stage12_http_evidence` 테이블에만 추가되며 RLS 활성화, `anon/authenticated` 직접 접근 금지입니다. `api/operations.js`를 포함한 전체 API 함수 **9개**로 설계했습니다.
+- **판정 구분:** 이전 11단계의 `UNV_RUN_ENVIRONMENT`는 공식 통과로 확인되지 않았습니다. 현재 READY·CI PASS와 가상 판정은 12단계 공식 통과/41종 클리어 증거가 아닙니다.
+
+### 새 저장소 설치 및 12단계 재현
+
+```bash
+git clone -b r5-work https://github.com/sdydy0298-dotcom/choi-bujang-secret-vault.git
+cd choi-bujang-secret-vault
+git status
+git log -1
+npm install
+npm run verify:12
+npm run build -- --local
+# 배포와 최신 커밋이 일치하는지 확인하고 최종 저장점 커밋을 만든 뒤
+npm run prepare:12
+npm run bundle
+```
+
+Production 배포는 Vercel에서 `npm run verify:12 && npm run build`로 검증합니다. 공개 `/aleph.json`의 `step=12`, `repoUrl`, `commit`과 `git rev-parse HEAD`를 대조해야 합니다. 그다음 Git에서 무시되는 `artifacts/submission.json`만 판정 사이트에 제출합니다. **비밀번호·JWT·개인키·Supabase 시크릿을 제출하거나 Git에 올리지 않습니다.** 운영 엔진 실행·회수 중지는 학생 프로젝트에서 임의로 수행하지 않으며, 기기와 앱의 중지/원복은 [운영 안내](docs/STAGE12_OPERATIONS.md)에 명시합니다.
+
+### 100점 가산 요건 자체 점검
+
+- `npm install`은 새 저장소에서 실제 실행해 오류 없는지를 검증합니다. 명령만 적었다고 PASS로 선언하지 않습니다.
+- `src/decider.mjs`는 [18개 입력 이름 계약](docs/DECIDER_REQUEST.md)만 읽고 응답 5개 필드, `RULE_IDS` 안의 규칙 ID를 `npm run test:12`에서 검증합니다.
+- `aleph.config.json`의 `step`은 **12**입니다.
+
+---
+
 ## 11단계 · 심판 격리 실행 위치를 찾기 위한 임시 비공개 진단 (2026-10-13)
 
 - `UNV_RUN_ENVIRONMENT`의 원인을 추측하지 않기 위해 사이트 **HTML 실행 → JS 모듈 → 인증 설정 → 로그인 → 기기 키 생성·등록·승인 확인 → 자료 API**의 진입 및 실패 지점을 구분하여 기록합니다.
