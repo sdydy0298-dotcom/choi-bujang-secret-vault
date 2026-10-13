@@ -87,7 +87,7 @@ try {
   if (new Set(attackAttempts.map(item => item.attackId)).size !== attackAttempts.length) {
     fail('공격 점검 ID가 중복되었습니다.');
   }
-  if ([6, 7, 8].includes(config.step)) {
+  if ([6, 7, 8, 9].includes(config.step)) {
     const required = ['anonymous_notes_rejected', 'static_notes_empty',
       'deployment_identity_available', 'main_security_header', 'auth_config_available'];
     for (const id of required) {
@@ -100,7 +100,7 @@ try {
     if (!/(기기|등록|device)/iu.test(notes.explanation)) {
       fail('bundle-notes.json의 explanation에 기기 규칙 설명을 작성해 주세요.');
     }
-    if ([7, 8].includes(config.step)) {
+    if ([7, 8, 9].includes(config.step)) {
       const fixtureIds = ['stage7_normal_allow', 'stage7_unregistered_deny',
         'stage7_composite_step_up', 'stage7_reverified_allow'];
       for (const id of fixtureIds) {
@@ -117,16 +117,25 @@ try {
         fail('bundle-notes.json에 이번 7단계 구현·확인 내용을 적어 주세요.');
       }
     }
-    if(config.step===8){
-      for(const id of ['stage8_known_zone_allow','stage8_unknown_route_deny','stage8_unauthorized_notices',
+    if(config.step>=8){
+      const stage8Required = ['stage8_known_zone_allow','stage8_unknown_route_deny','stage8_unauthorized_notices',
         'stage8_global_notes_list_denied','stage8_notes_write_denied','stage8_student_notice_write_denied',
         'stage8_own_note_update_allow','stage8_cross_owner_read_denied','stage8_my_list_route_allowed',
-        'stage8_scoped_list_unauthorized']){
+        ...(config.step===8 ? ['stage8_scoped_list_unauthorized'] : [])];
+      for(const id of stage8Required){
         const c=attackAttempts.find(x=>x.attackId===id);
         if(!c||!c.observed.startsWith('통과:'))fail('8단계 자원 구역 검사 실패: '+id);
       }
-      const live=attackAttempts.find(x=>x.attackId==='stage8_live_cross_owner');
-      if(!live||!live.observed.startsWith('미실행:'))fail('운영 A/B 계정 직접 API 시험은 미실행으로 기록해 주세요.');
+      if(config.step===8){
+        const live=attackAttempts.find(x=>x.attackId==='stage8_live_cross_owner');
+        if(!live||!live.observed.startsWith('미실행:'))fail('운영 A/B 계정 직접 API 시험은 미실행으로 기록해 주세요.');
+      }
+    }
+    if(config.step===9){
+      for(const id of ['stage9_burst_revocation_proposed','stage9_normal_requests_preserved']){
+        const check=attackAttempts.find(x=>x.attackId===id);
+        if(!check||!check.observed.startsWith('통과:'))fail('9단계 가상 탐지 검사 실패: '+id);
+      }
     }
   }
   const bundle = {

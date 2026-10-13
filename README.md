@@ -1,5 +1,16 @@
 # BYTE BACK 방어전 시작 틀 R5
 
+## 9단계 저장점 · 도플갱어 탐지와 회수 제안 (2026-10-13)
+
+- **이전 저장점**: 8단계 코드까지 유지한 `r5-work`의 `fc27cfd4b3a9`을 기준으로 9단계만 추가했습니다. 1~8단계 접근 판정기, 메모 API, Supabase 소유권/RLS, 로그인 화면과 기존 자료는 변경하지 않았습니다.
+- **공식 입력 계약**: `docs/DETECT_EVENTS.md`에 따라 `src/detect.mjs`의 `detect(events)`는 각 사건의 `at`, `method`, `identity.sub`만 읽습니다. 브라우저의 임의 사용자 ID·토큰·메모 본문을 권한 증거로 사용하거나 로그에 보관하지 않습니다.
+- **탐지 기준**: 같은 가명 `identity.sub`의 `GET`가 이동식 10분 구간에서 **121건 이상**이면 정확히 `{ action: 'propose_revocation', reasonCode: 'burst_read', subject: '<가명 주체>' }`를 반환합니다. 120건 이하, 주체가 다른 사건, 시간대가 떨어진 사건, GET이 아닌 사건은 `{ action: 'observe' }`입니다.
+- **역할 분리**: 회수 제안은 `src/decider.mjs`의 5개 필드 `aleph.decision.v1` 접속 결정과 별개입니다. 새 회수 API·임의 DB 변경·기기 권한 삭제는 없습니다. 공식 가상 사건에는 **네트워크·기기 ID가 없으므로** 이를 만들어서 특정 기기를 회수한 것처럼 기록하지 않습니다. 실회수, 경과 시간, 회수 뒤 재접속 차단은 운영 심판이 확인합니다.
+- **재현**: `npm run verify:9` (1~8단계 회귀, 공식 6개 탐지 사례, 9개 경계 시험) → `npm run build -- --local` → 최신 커밋의 Production READY 확인 → `npm run prepare:9` → `npm run bundle`. 제출 묶음은 Git 추적에서 제외됩니다.
+
+**제출 정보**: 단계 `9`, 브랜치 `r5-work`, 배포 `https://secret-vault-sdydy0298.vercel.app`, 저장소 `https://github.com/sdydy0298-dotcom/choi-bujang-secret-vault`. 공식 9단계 채점 결과는 재제출 후 별도 확인해야 합니다.
+
+
 ## 최신 수정 · 8단계 광범위한 구역 허용 차단 (2026-10-13)
 
 - 심판 오류 `S08_OTHER_ZONE_ALLOWED` 대응: 판정기에서 `GET /notes`와 `GET /api/notes` 전체 목록 경로를 **무조건 거부**합니다. 자기 목록은 `GET /api/my/notes`로 조회합니다.

@@ -1,5 +1,7 @@
 import { checkDecider } from '../scripts/decider-test.mjs';
 import { decide, RULE_IDS } from './decider.mjs';
+import { detect } from './detect.mjs';
+import { checkDetection } from '../scripts/detect-test.mjs';
 
 const readJson = async response => {
   try { return await response.json(); } catch { return null; }
@@ -23,7 +25,7 @@ export async function runAttackChecks(config) {
       observed: exposed ? '확인 표시가 보임' : '확인 표시가 보이지 않음' }];
   }
 
-  if (![6, 7, 8].includes(config.step)) throw new Error('현재 운영 자기점검은 6~7단계 저장점 기준입니다.');
+  if (![6, 7, 8, 9].includes(config.step)) throw new Error('현재 운영 자기점검은 6~9단계 저장점을 지원합니다.');
 
   const [page, notes, data, identity, authConfig] = await Promise.all([
     '/', '/api/notes', '/data.json', '/aleph.json', '/api/auth-config',
@@ -79,7 +81,7 @@ export async function runAttackChecks(config) {
     expected:'실제 운영 엔진에서 인증 전 메모 거부와 재로그인 뒤 새 요청 허용',
     observed:'미실행: 학생 서버에서는 엔진 재로그인 세션·시각을 실측할 수 없어 심판에 위임',
   };
-  if(config.step===8){
+  if(config.step>=8){
     const req={schema:'aleph.decision.v1',requestId:'stage8-practice',
       classId:'class_fixture',projectId:'project_fixture',
       subjectId:'learner_fixture',deviceId:'aaaaaaaaaaaaaaaa',
@@ -101,7 +103,7 @@ export async function runAttackChecks(config) {
       fetch(new URL('/api/my/notes',app),options)
     ]);
     const [noticeBody,scopedBody]=await Promise.all([readJson(notice),readJson(scopedList)]);
-    return [...httpChecks,...fixtures,
+    const stage8Checks = [...httpChecks,...fixtures,
       check('stage8_known_zone_allow','공식 가상 자기 메모 GET 허용',own==='allow',own),
       check('stage8_unknown_route_deny','export 기능 경로 거부',unknown==='deny',unknown),
       check('stage8_unauthorized_notices','비로그인 공지 API 거부',
@@ -116,6 +118,27 @@ export async function runAttackChecks(config) {
         [401,403].includes(scopedList.status)&&!!scopedBody?.error,'HTTP '+scopedList.status),
       {attackId:'stage8_live_cross_owner',expected:'실제 A/B 사용자 간 메모 API 요청 확인',
        observed:'미실행: 심판 비공개 요청과 실제 운영 사용자 소유 관계 확인이 필요'}
+    ];
+    if(config.step===8) return stage8Checks;
+
+    // The submission contract permits at most 20 attackAttempts. Keep the
+    // previous stage's executed checks and make room for the two actual
+    // stage-9 detector fixture checks. Do not mislabel local fixtures as a
+    // completed engine revocation or re-login trial.
+    const detectionResults=await checkDetection(detect);
+    const proposed=[2,3].every(i=>detectionResults[i]?.passed===true);
+    const normal=[0,1,4,5].every(i=>detectionResults[i]?.passed===true);
+    const compactPrior=stage8Checks.filter(({attackId})=>
+      attackId!=='stage8_live_cross_owner' &&
+      attackId!=='stage8_scoped_list_unauthorized');
+    return [
+      ...compactPrior,
+      check('stage9_burst_revocation_proposed',
+        '10분 120건 초과 GET 가상 사건만 대상 subject와 burst_read 제안',
+        proposed,'공식 detect:test 중 121/200건 가상 사례'),
+      check('stage9_normal_requests_preserved',
+        '정상·120건 경계·타인 합산·시간 분산 사건은 observe',
+        normal,'공식 detect:test 중 정상·경계·혼합·분산 사례')
     ];
   }
   return [...httpChecks, ...fixtures, live];

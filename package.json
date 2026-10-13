@@ -15,7 +15,10 @@
     "prepare:7": "node scripts/prepare-stage7.mjs",
     "test:8": "node --test test/step8.test.mjs test/step8-api.test.mjs test/stage8-access-trace.test.mjs",
     "prepare:8": "node scripts/prepare-stage8.mjs",
-    "verify:8": "npm run test:r5 && npm run test:6 && npm run test:7 && npm run test:8 && npm run decider:test && npm run fixture:7"
+    "verify:8": "npm run test:r5 && npm run test:6 && npm run test:7 && npm run test:8 && npm run decider:test && npm run fixture:7",
+    "test:9": "node --test test/step9.test.mjs",
+    "prepare:9": "node scripts/prepare-stage9.mjs",
+    "verify:9": "npm run verify:8 && npm run detect:test && npm run test:9"
   },
   "engines": {
     "node": ">=22"
