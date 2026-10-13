@@ -1,0 +1,43 @@
+name: Stage 11 public browser smoke
+on:
+  push:
+    paths:
+      - .github/workflows/stage11-public-browser-smoke.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Check public HTTP status without Vercel session
+        shell: bash
+        run: |
+          set -euo pipefail
+          for domain in secret-vault-sdydy0298.vercel.app choi-bujang-secret-vault-95p38aipw-sdydy0298-dotcom.vercel.app; do
+            for path in / /manifest.webmanifest /icon.svg /offline.html /sw.js /api/auth-config; do
+              status=$(curl --silent --show-error --location --max-time 18 --output /tmp/aleph-page --write-out '%{http_code}' "https://${domain}${path}")
+              echo "${domain}${path} HTTP ${status}"
+              if [[ "${status}" != "200" ]]; then exit 1; fi
+            done
+          done
+      - name: Open Production in fresh headless Chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          google-chrome --version
+          for domain in secret-vault-sdydy0298.vercel.app choi-bujang-secret-vault-95p38aipw-sdydy0298-dotcom.vercel.app; do
+            echo "Testing Chrome: ${domain}"
+            profile=$(mktemp -d)
+            timeout 40s google-chrome --headless=new --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-extensions --user-data-dir="${profile}" --virtual-time-budget=9000 --dump-dom "https://${domain}/" >/tmp/aleph-dom.html 2>/tmp/aleph-chrome.log || true
+            grep -oE '<span id="auth-state" class="state">[^<]*</span>' /tmp/aleph-dom.html | head -1 || true
+            if grep -q '<span id="auth-state" class="state">로그아웃됨</span>' /tmp/aleph-dom.html; then
+              echo "PASS: authentication bootstrap reached logged-out state"
+            else
+              echo "FAIL: authentication initialization did not complete in Chrome"
+              grep -iE 'error|failed|net::|uncaught|exception' /tmp/aleph-chrome.log | head -20 || true
+              exit 1
+            fi
+            rm -rf "${profile}"
+          done
