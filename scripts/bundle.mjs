@@ -125,7 +125,7 @@ try {
       for(const id of stage8Required){
         // All stage-8 regression tests still run under verify:10. The <=20
         // submission summary omits two redundant stage-8 evidence entries.
-        if (config.step === 10 && ['stage8_unknown_route_deny',
+        if (config.step >= 10 && ['stage8_unknown_route_deny',
           'stage8_student_notice_write_denied'].includes(id)) continue;
         const c=attackAttempts.find(x=>x.attackId===id);
         if(!c||!c.observed.startsWith('통과:'))fail('8단계 자원 구역 검사 실패: '+id);
