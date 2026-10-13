@@ -155,9 +155,17 @@ export default async function handler(req,res) {
     origin:config.publicAppUrl, token:authorization.slice(7),
     noteId:id, expectedBodySha256:restoredBodyHash
   });
+  // Log only observed statuses and check identifiers. Never log JWTs, user IDs
+  // or note contents; this makes Production retest failures diagnosable.
+  console.info(JSON.stringify({event:'stage10_post_restore_retests',
+    allExecutedPassed:report.allExecutedPassed,
+    outcomes:report.checks.map(c=>({testId:c.testId,
+      outcome:c.outcome,actualStatus:c.actualStatus??null}))}));
   const {error:auditError}=await db.schema('defense').from('note_restore_retests')
     .insert({note_id:id, owner_id:scope.owner_id, judge_run_id:scope.judge_run_id,
       policy_version:preflight.version, checks:report.checks});
+  console.info(JSON.stringify({event:'stage10_retest_evidence_persisted',
+    persisted:!auditError, code:auditError?.code??null}));
   // Never report a verified recovery when required live retests failed or
   // their append-only evidence was not persisted.
   if (auditError || !report.allExecutedPassed || !report.checks?.some(c => c.testId === 'stage10_owner_get_after_restore' && c.outcome === 'pass') ||
