@@ -23,7 +23,7 @@
     "prepare:10": "node scripts/prepare-stage10.mjs",
     "policy:10": "node scripts/stage10-policy.mjs",
     "verify:10": "npm run verify:9 && npm run test:10",
-    "test:11": "node --test test/step11.test.mjs",
+    "test:11": "node --test test/step11.test.mjs test/stage11-local-auth.test.mjs",
     "verify:11": "npm run verify:10 && npm run test:11",
     "prepare:11": "node scripts/prepare-stage11.mjs"
   },
