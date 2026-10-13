@@ -39,16 +39,19 @@ function createMockDB() {
   }}}};
   return {db,rows};
 }
+// Stage 8 regression isolates the historical ownership rules. Stage 11
+// signature verification is exercised independently in step11.test.mjs.
 function makeHandler(relativePath,db){
   const source=readFileSync(new URL(relativePath,import.meta.url),'utf8')
     .replace(/^import[^\n]+\n/gmu,'')
     .replace('export default async function handler','async function handler');
   const factory=new Function('createClient','createLoginVerifier','config','resourceId','idFromPath','traceStage8Access',
-    'scopedNoteQuery','noteOwnerColumns','getNoteScope','noteOwnerMatches','crypto','process',
+    'scopedNoteQuery','noteOwnerColumns','getNoteScope','noteOwnerMatches','crypto','process','requireApprovedDevice',
     source+'\nreturn handler;');
   return factory(()=>db,()=>async auth=>identities[auth]??null,{},
     (type,id)=>type+':'+id,idFromPath,()=>{},scopedNoteQuery,noteOwnerColumns,getNoteScope,noteOwnerMatches,
-    {randomUUID},{env:{SUPABASE_URL:'https://example.invalid',SUPABASE_SECRET_KEY:'test-only-placeholder'}});
+    {randomUUID},{env:{SUPABASE_URL:'https://example.invalid',SUPABASE_SECRET_KEY:'test-only-placeholder'}},
+    async()=>({ok:true}));
 }
 function request(handler,token,method,path,body){
   return new Promise((resolve,reject)=>{
