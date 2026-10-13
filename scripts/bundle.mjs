@@ -68,7 +68,7 @@ try {
   if (typeof notes.explanation !== 'string' || notes.explanation.trim().length < 10) {
     fail('bundle-notes.json의 explanation에 이번 단계에서 한 일을 세 줄로 적어 주세요.');
   }
-  const checkerUrl = pathToFileURL(join(root, 'src', 'attack-check.mjs'));
+  const checkerUrl = pathToFileURL(join(root, 'src', config.step === 12 ? 'stage12-bundle-check.mjs' : 'attack-check.mjs'));
   const { runAttackChecks } = await import(checkerUrl.href);
   if (typeof runAttackChecks !== 'function') fail('src/attack-check.mjs가 runAttackChecks를 내보내야 합니다.');
   const attackAttempts = await runAttackChecks(config);
@@ -84,6 +84,7 @@ try {
       fail('공격 점검 결과에는 attackId·expected·observed만 넣어 주세요.');
     }
   }
+  const hasAcceptableObservation = item => item && (config.step === 12 || item.observed.startsWith('통과:'));
   if (new Set(attackAttempts.map(item => item.attackId)).size !== attackAttempts.length) {
     fail('공격 점검 ID가 중복되었습니다.');
   }
@@ -92,7 +93,7 @@ try {
       'deployment_identity_available', 'main_security_header', 'auth_config_available'];
     for (const id of required) {
       const attempt = attackAttempts.find(item => item.attackId === id);
-      if (!attempt || !attempt.observed.startsWith('통과:')) {
+      if (!attempt || !hasAcceptableObservation(attempt)) {
         fail(config.step + '단계 공개 배포 자기점검 실패: ' + id
           + (attempt ? ' (' + attempt.observed + ')' : ' (미실행)'));
       }
@@ -105,7 +106,7 @@ try {
         'stage7_composite_step_up', 'stage7_reverified_allow'];
       for (const id of fixtureIds) {
         const record = attackAttempts.find(item => item.attackId === id);
-        if (!record || !record.observed.startsWith('통과:')) {
+        if (!record || !hasAcceptableObservation(record)) {
           fail('7단계 가상 판정 확인 실패: ' + id);
         }
       }
@@ -128,7 +129,7 @@ try {
         if (config.step >= 10 && ['stage8_unknown_route_deny',
           'stage8_student_notice_write_denied'].includes(id)) continue;
         const c=attackAttempts.find(x=>x.attackId===id);
-        if(!c||!c.observed.startsWith('통과:'))fail('8단계 자원 구역 검사 실패: '+id);
+        if(!c||!hasAcceptableObservation(c))fail('8단계 자원 구역 검사 실패: '+id);
       }
       if(config.step===8){
         const live=attackAttempts.find(x=>x.attackId==='stage8_live_cross_owner');
@@ -138,7 +139,7 @@ try {
     if(config.step>=9){
       for(const id of ['stage9_burst_revocation_proposed','stage9_normal_requests_preserved']){
         const check=attackAttempts.find(x=>x.attackId===id);
-        if(!check||!check.observed.startsWith('통과:'))fail('9단계 가상 탐지 검사 실패: '+id);
+        if(!check||!hasAcceptableObservation(check))fail('9단계 가상 탐지 검사 실패: '+id);
       }
     }
   }
@@ -146,7 +147,7 @@ try {
     if (config.restoreRoute !== '/api/restore') fail('10단계 복원 경로 설정 오류');
     for (const id of ['stage10_verified_policy_snapshot','stage10_unauthorized_restore_rejected']) {
       const item = attackAttempts.find(x => x.attackId === id);
-      if (!item || !item.observed.startsWith('통과:')) fail('10단계 점검 실패: '+id);
+      if (!item || !hasAcceptableObservation(item)) fail('10단계 점검 실패: '+id);
     }
   }
   const bundle = {

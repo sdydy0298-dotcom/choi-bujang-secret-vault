@@ -25,6 +25,10 @@ jobs:
         run: npm run verify:12
       - name: Local sanitized public build
         run: npm run build -- --local
+      - name: Prepare truthful stage 12 submission
+        run: npm run prepare:12
+      - name: Bundle submission
+        run: npm run bundle
       - name: Confirm Production points at this exact commit
         shell: bash
         env:
@@ -46,10 +50,6 @@ jobs:
             fi
             sleep 8
           done
-      - name: Prepare truthful stage 12 submission
-        run: npm run prepare:12
-      - name: Bundle submission
-        run: npm run bundle
       - name: Publish submission JSON (no secrets)
         uses: actions/upload-artifact@v4
         with:

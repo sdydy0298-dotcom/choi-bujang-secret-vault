@@ -27,10 +27,18 @@ npm run bundle
 
 Production 배포는 Vercel에서 `npm run verify:12 && npm run build`로 검증합니다. 공개 `/aleph.json`의 `step=12`, `repoUrl`, `commit`과 `git rev-parse HEAD`를 대조해야 합니다. 그다음 Git에서 무시되는 `artifacts/submission.json`만 판정 사이트에 제출합니다. **비밀번호·JWT·개인키·Supabase 시크릿을 제출하거나 Git에 올리지 않습니다.** 운영 엔진 실행·회수 중지는 학생 프로젝트에서 임의로 수행하지 않으며, 기기와 앱의 중지/원복은 [운영 안내](docs/STAGE12_OPERATIONS.md)에 명시합니다.
 
+
+### 심판 격리 환경 제출 호환성 수정
+
+- `npm run bundle`의 12단계 전용 경로는 `node:fs`, `node:path`, `node:url`, 읽기 전용 `node:child_process(git)` 및 `node:crypto(SHA-256·randomUUID)`만 사용하며 외부 npm 패키지를 불러오지 않습니다.
+- 격리 환경의 공개 HTTPS 요청은 `GET`만 수행합니다. `POST /api/restore`는 심판 제한으로 실행하지 않고 제출 `observed: not_run`으로 기록합니다. 본인/타인 권한의 실제 POST/PUT/DELETE를 실행한 것으로 주장하지 않습니다.
+- 모든 12단계 번들 항목은 실제 공개 응답, 로컬 가상 판정기·탐지 시험, 정책 사본 파일 검증 중 어느 결과인지 구분하며 실패·네트워크 차단을 통과로 바꾸지 않습니다. `npm run test:12`가 차단 환경과 GET 전용 모의 환경을 검증합니다.
+- GitHub Actions는 번들 생성 성공을 Production 커밋 대조보다 먼저 확인합니다. 로컬·CI 통과는 공식 41종 공격 재시험과 구별합니다.
+
 ### 저장점 검증 기준
 
 1. `npm install`과 `npm run verify:12`는 GitHub Actions의 새 Ubuntu 환경에서 직접 실행합니다.
-2. `npm run bundle`은 **GitHub 저장점 커밋과 Production의 `/aleph.json` 커밋이 같을 때만** 실행하며, 결과에 가상 테스트와 실측 HTTP 결과를 구별합니다.
+2. `npm run bundle`은 격리 제한에서도 우선 실행 가능해야 하며, **최종 제출은** GitHub 저장점 커밋과 Production의 `/aleph.json` 커밋이 같은지 확인한 뒤 진행합니다. 결과에 가상 테스트와 실측 HTTP 결과를 구별합니다.
 3. 41종 공식 공격, 운영 엔진 탐지·회수 및 기기/복구 연속 공격은 **실제 판정이 나올 때까지 미실행**으로 유지합니다.
 4. 현재 작업의 다른 파일을 훼손하지 않고, 실제 보안 상태가 확인되지 않은 항목을 PASS로 바꾸지 않습니다.
 
