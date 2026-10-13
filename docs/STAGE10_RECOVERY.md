@@ -81,10 +81,10 @@ DB 검증은 하나의 트랜잭션에서 `BEGIN`, 복구 SQL, `test/stage10-dat
 
 ### 실행 전 미리보기와 확인 (현재 API)
 
-1. 서명된 B로 `POST /api/restore`, `{ "id": "<B 메모 UUID>" }`를 보냅니다.
+1. 서명된 B로 **미리보기** `POST /api/restore`, `{ "id": "<B 메모 UUID>", "dryRun": true }`를 보냅니다.
 2. `applied:false`와 `backup.version`, `changes`를 확인합니다. 이 요청은 복원이나 재시험을 실행하지 않습니다.
 3. 응답의 `confirm` 객체를 동일 경로에 POST합니다. 소유자/해시가 사본과 다르면 중단합니다.
 4. 실제 복원 후 단건 B GET(200 및 해시), 익명 단건 GET(401), B 목록 GET(200), 익명 목록 GET(401), 익명 전체 GET(401)을 순서대로 실행하고 DB에 기록합니다. 응답의 `postRestoreRetests`를 확인합니다.
 5. A 서명 토큰이 없는 교차 소유권 검사는 `not_run`으로 남깁니다. 6~9단계 판정기 회귀는 `npm run verify:10`의 로컬 시험이며 실제 배포 요청의 기록으로 혼동하지 않습니다.
 
-기존 문서의 `{id}` 단독 실행 설명보다 이 절차가 우선합니다. 기본 동작은 미리보기입니다.
+명시적인 미리보기에는 `dryRun:true`가 필요합니다. 기존 공식 판정기의 `{id}` 단독 POST는 서명된 B의 사본을 검증한 뒤 자동 복원 및 HTTP 재시험을 수행합니다. `dryRun:false`를 직접 명시할 때는 미리보기의 소유자·본문 해시 확인값도 함께 보내야 합니다. 정책 원본 파일은 변경하지 않고 별도 `recovery/MANIFEST.json`과 코드 내 독립적인 원본 파일 SHA-256으로 검증합니다.
