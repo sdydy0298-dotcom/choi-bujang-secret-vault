@@ -1,0 +1,10 @@
+{
+  "schema": "aleph.stage10.policy.manifest.v1",
+  "files": {
+    "stage9-safe-policy.json": {
+      "version": "stage9-d1004397",
+      "baseCommit": "d1004397ac47317cfdedddb483a652c1c300f8e2",
+      "sha256": "6afb1c0d5a6be13f35ea1ec60817169253141815b84d5543469882244c527769"
+    }
+  }
+}
