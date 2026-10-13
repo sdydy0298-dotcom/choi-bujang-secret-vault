@@ -191,3 +191,5 @@ Supabase `defense.notes`는 RLS가 켜져 있습니다. `anon`에는 테이블 C
 **검증:** `npm run test:r5 && npm run test:6 && npm run test:7 && npm run test:8` 및 `npm run decider:test && npm run fixture:7`. 새 `test/step8-api.test.mjs`는 **실제 API 핸들러 코드를 격리된 모의 인증·DB로 실행해** 동일 JWT sub의 A/B 메모 조회·변경 구역, 목록 및 기존 학생 레코드 유지, 본문 위조 거부를 검사합니다. Production 배포 READY 뒤 `npm run prepare:8 && npm run bundle`을 실행합니다.
 
 **판정의 한계:** S08_OTHER_ZONE_ALLOWED의 비공개 심판 요청·토큰은 확인되지 않았습니다. 동일 `sub` 사용은 재현 가능한 보안 결함의 조건이며 실제 심판이 그 조건을 사용했다는 증거는 없습니다. 로컬 테스트 PASS는 심판 통과의 증거가 아니므로 실제 A/B 로그인 교차 GET과 판정 결과는 추가 확인 대상입니다.
+
+**배포 회귀 안전장치:** `npm run verify:8`은 기존 단계(3+6+5)와 8단계(7+3) 단위 시험 및 6~7단계 가상 판정을 실행합니다. Vercel Production 빌드는 이 검증을 통과해야만 `npm run build`를 실행합니다. READY는 이 테스트 게이트를 통과했다는 뜻이며, 비공개 심판의 실제 A/B 공격 검증을 의미하지 않습니다.
