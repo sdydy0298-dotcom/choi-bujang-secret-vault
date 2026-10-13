@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import config from '../../aleph.config.json' with { type: 'json' };
+import { resourceId } from '../../src/resource-zones.mjs';
 import { createLoginVerifier } from '../../src/verify-login.mjs';
 
 const JSON_HEADERS = {
@@ -82,7 +83,7 @@ export default async function handler(request, response) {
     if (error) return sendJson(response, 502, { error: 'DATA_SOURCE_UNAVAILABLE' });
     if (!data) return sendJson(response, 404, { error: 'NOTE_NOT_FOUND' });
 
-    return sendJson(response, 200, { id: data.id, title: data.title, body: data.content });
+    return sendJson(response, 200, { id: data.id, resourceId: resourceId('note', data.id), title: data.title, body: data.content });
   }
 
   if (request.method === 'PUT') {
@@ -105,7 +106,7 @@ export default async function handler(request, response) {
     if (error) return sendJson(response, 502, { error: 'DATA_SOURCE_UNAVAILABLE' });
     if (!data) return sendJson(response, 404, { error: 'NOTE_NOT_FOUND' });
 
-    return sendJson(response, 200, { id });
+    return sendJson(response, 200, { id, resourceId: resourceId('note', id) });
   }
 
   const { data, error } = await supabase
@@ -120,5 +121,5 @@ export default async function handler(request, response) {
   if (error) return sendJson(response, 502, { error: 'DATA_SOURCE_UNAVAILABLE' });
   if (!data) return sendJson(response, 404, { error: 'NOTE_NOT_FOUND' });
 
-  return sendJson(response, 200, { id });
+  return sendJson(response, 200, { id, resourceId: resourceId('note', id) });
 }

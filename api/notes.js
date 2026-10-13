@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import config from '../aleph.config.json' with { type: 'json' };
+import { resourceId } from '../src/resource-zones.mjs';
 import { createLoginVerifier } from '../src/verify-login.mjs';
 
 const JSON_HEADERS = {
@@ -78,6 +79,7 @@ export default async function handler(request, response) {
     return sendJson(response, 200, {
       notes: (data ?? []).map(note => ({
         id: note.id,
+        resourceId: resourceId('note', note.id),
         title: note.title,
         body: note.content,
       })),
@@ -108,5 +110,5 @@ export default async function handler(request, response) {
     return sendJson(response, 502, { error: 'DATA_SOURCE_UNAVAILABLE' });
   }
 
-  return sendJson(response, 201, { id });
+  return sendJson(response, 201, { id, resourceId: resourceId('note', id) });
 }
