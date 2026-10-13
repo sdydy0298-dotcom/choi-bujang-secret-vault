@@ -1,5 +1,6 @@
 import { createHash, createPublicKey, verify as verifySignature } from 'node:crypto';
 import { getNoteScope } from './note-scope.mjs';
+import { idFromPath } from './resource-zones.mjs';
 
 const DEVICE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const NONCE = /^[0-9a-f]{32}$/u;
@@ -55,7 +56,14 @@ export async function requireApprovedDevice(request, identity, db) {
   try {
     const url = new URL(request.url, 'https://invalid.example');
     if (url.hash || url.username || url.password || !url.pathname.startsWith('/api/')) throw Error('path');
-    target = url.pathname + url.search;
+    // Vercel's [id].js adapter appends a matching ?id=<path UUID>.
+    // It is not present in the browser's signed URL. Strip only this exact,
+    // semantically redundant route parameter, never an arbitrary query.
+    const route = /^\/api\/(notes|notices)\/[^/]+$/u.exec(url.pathname);
+    const dynamicId = route ? idFromPath(request,route[1]) : null;
+    const routerParam = dynamicId && url.searchParams.size===1
+      && url.searchParams.get('id')?.toLowerCase()===dynamicId.toLowerCase();
+    target = url.pathname + (routerParam ? '' : url.search);
   } catch { return { status: 400, error: 'DEVICE_INVALID_TARGET' }; }
   const { data: record, error } = await db.schema('defense').from('device_approvals')
     .select('id,public_jwk,status').eq('id', id.toLowerCase())
