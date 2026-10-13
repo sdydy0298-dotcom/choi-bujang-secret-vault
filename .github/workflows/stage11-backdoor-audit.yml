@@ -15,6 +15,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo 'Stage11 dynamic-route adapter: print only sanitized error diagnostics'
           for host in secret-vault-sdydy0298.vercel.app choi-bujang-secret-vault-sdydy0298-dotcom.vercel.app; do
             echo "Auditing public hostname: ${host}"
             while IFS='|' read -r method path; do
