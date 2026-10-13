@@ -4,8 +4,6 @@ export const RULE_IDS=Object.freeze(['device_registered','step_up_required','res
 const reply=(r,decision,reasonCode,ruleId)=>({schema:'aleph.decision.v1',requestId:r?.requestId,decision,reasonCode,ruleIds:[ruleId]});
 const UUID='[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const READ=Object.freeze({
- 'GET /api/notes':/^\/api\/notes$/u,
- 'GET /notes':/^\/notes$/u,
  'GET /notes/:id':/^\/notes\/[A-Za-z0-9._~-]{1,128}$/u,
  'GET /api/my/notes':/^\/api\/my\/notes$/u,
  'GET /api/notes/:id':new RegExp('^/api/notes/'+UUID+'$','iu'),
@@ -16,18 +14,26 @@ const WRITE=Object.freeze({
  'PUT /notes/:id':/^\/notes\/[A-Za-z0-9._~-]{1,128}$/u,
  'POST /api/notes':/^\/api\/notes$/u,
  'PUT /api/notes/:id':new RegExp('^/api/notes/'+UUID+'$','iu'),
- 'DELETE /api/notes/:id':new RegExp('^/api/notes/'+UUID+'$','iu'),
- 'POST /api/notices':/^\/api\/notices$/u,
- 'PUT /api/notices/:id':new RegExp('^/api/notices/'+UUID+'$','iu')
+ 'DELETE /api/notes/:id':new RegExp('^/api/notes/'+UUID+'$','iu')
 });
 // Exact API resource routes are admitted to the owner-filtered *server* API.
 // A route match is not an ownership grant: the API must verify the signed user
 // and DB owner on every single-item GET/PUT/DELETE, including judge A/B.
 const OWNER_ENFORCED_ROUTES = new Set([
-  'GET /api/notes', 'POST /api/notes', 'GET /api/my/notes',
+  'POST /api/notes', 'GET /api/my/notes',
   'GET /api/notes/:id', 'PUT /api/notes/:id', 'DELETE /api/notes/:id'
 ]);
 const PUBLIC_NOTICE_READ_ROUTES = new Set(['GET /api/notices', 'GET /api/notices/:id']);
+// Stage 8: engine v1 contains no instructor-role attestation. Notice or
+// instructor-material writes are NEVER authorized by this decider, even if
+// a server binding attempts to mark a caller as an instructor.
+const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const BLOCKED_GLOBAL_LISTS = new Set(['GET /notes', 'GET /api/notes']);
+function isNoticeOrInstructorPath(r) {
+  return r.service === 'notices' ||
+    (typeof r.path === 'string' &&
+      /^\/(?:api\/)?(?:notices|instructor-notices|announcements|instructor-materials)(?:\/|$)/u.test(r.path));
+}
 function apiOwnedRoute(r, key) {
   return (r.service === 'notes' && OWNER_ENFORCED_ROUTES.has(key))
     || (['notes', 'notices'].includes(r.service) && PUBLIC_NOTICE_READ_ROUTES.has(key));
@@ -53,7 +59,7 @@ function boundResource(r){
   &&x.deviceId===r.deviceId&&x.service===r.service
   &&x.path===r.path&&Array.isArray(x.methods)&&x.methods.includes(r.method)
   &&typeof x.resourceId==='string'&&(notice
-   ?x.resourceId.startsWith('notice:')&&(r.method==='GET'||x.instructor===true)
+   ?x.resourceId.startsWith('notice:')&&r.method==='GET'
    :x.resourceId.startsWith('note:')&&x.ownerSubjectId===r.subjectId));
 }
 function riskCount(r){
@@ -78,6 +84,14 @@ export async function decide(r){
  }
  const key=typeof r.route==='string'&&typeof r.method==='string'
   &&r.route.startsWith(r.method+' ')?r.route:null;
+ // An explicit deny must take priority over every allowlist and trusted
+ // binding. A valid UUID note item remains readable through the owner-
+ // enforcing API, while GET /api/my/notes is the only personal list route.
+ if(WRITE_METHODS.has(r.method)&&isNoticeOrInstructorPath(r))
+  return reply(r,'deny','write_not_allowed','write_not_allowed');
+ if(BLOCKED_GLOBAL_LISTS.has(key)||
+    (r.method==='GET'&&(r.path==='/notes'||r.path==='/api/notes')))
+  return reply(r,'deny','route_not_allowed','resource_zone');
  const read=key?READ[key]:null,write=key?WRITE[key]:null;
  if((!read&&!write)||typeof r.path!=='string'
   ||!(read??write).test(r.path)||r.queryLength!==0

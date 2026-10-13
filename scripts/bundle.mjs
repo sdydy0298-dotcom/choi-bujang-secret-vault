@@ -119,7 +119,7 @@ try {
     }
     if(config.step===8){
       for(const id of ['stage8_known_zone_allow','stage8_unknown_route_deny','stage8_unauthorized_notices',
-        'stage8_owner_filtered_list_allowed','stage8_notes_write_denied','stage8_student_notice_write_denied',
+        'stage8_global_notes_list_denied','stage8_notes_write_denied','stage8_student_notice_write_denied',
         'stage8_own_note_update_allow','stage8_cross_owner_read_denied','stage8_my_list_route_allowed',
         'stage8_scoped_list_unauthorized']){
         const c=attackAttempts.find(x=>x.attackId===id);

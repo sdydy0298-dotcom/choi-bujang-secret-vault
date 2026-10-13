@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {decide,RULE_IDS} from '../src/decider.mjs';
+import {readFileSync} from 'node:fs';
 import {resourceId,idFromPath,isVerifiedInstructor,safeContent} from '../src/resource-zones.mjs';
 const ID='11111111-1111-4111-8111-111111111111';
 const base={schema:'aleph.decision.v1',requestId:'stage8-unit',classId:'class_fixture',
@@ -27,12 +28,56 @@ test('other subjects, devices, classes, projects cannot access same resource',as
   await expect(x,'deny','route_not_allowed');
  await expect({subjectId:'other_student',method:'PUT',route:'PUT /notes/:id'},'deny','write_not_allowed');
 });
-test('owner-filtered API list routes are permitted, student notice updates denied',async()=>{
- await expect({route:'GET /api/notes',path:'/api/notes'},'allow','approved');
+test('global list denied, personal list permitted, notice writes denied',async()=>{
+ await expect({route:'GET /api/notes',path:'/api/notes'},'deny','route_not_allowed');
+ await expect({route:'GET /notes',path:'/notes'},'deny','route_not_allowed');
  await expect({route:'GET /api/my/notes',path:'/api/my/notes'},'allow','approved');
  await expect({method:'PUT',route:'PUT /api/notices/:id',path:'/api/notices/'+ID},'deny','write_not_allowed');
  await expect({method:'POST',route:'POST /api/notices',path:'/api/notices'},'deny','write_not_allowed');
 });
+test('stage8 forbidden routes stay denied even with injected instructor or owner bindings',async()=>{
+ const previous=process.env.ALEPH_RESOURCE_BINDINGS;
+ const id=ID;
+ const keys={classId:'class_fixture',projectId:'project_fixture',
+   subjectId:'learner_fixture',deviceId:'aaaaaaaaaaaaaaaa'};
+ const bindings=[
+  {...keys,service:'notes',path:'/api/notes',resourceId:'note:collection',
+   ownerSubjectId:'learner_fixture',methods:['GET']},
+  {...keys,service:'notes',path:'/notes',resourceId:'note:collection',
+   ownerSubjectId:'learner_fixture',methods:['GET']},
+  {...keys,service:'notices',path:'/api/notices/'+id,resourceId:'notice:'+id,
+   instructor:true,methods:['GET','PUT','PATCH','DELETE']},
+  {...keys,service:'notices',path:'/api/notices',resourceId:'notice:collection',
+   instructor:true,methods:['GET','POST']}
+ ];
+ try{
+  process.env.ALEPH_RESOURCE_BINDINGS=JSON.stringify(bindings);
+  for(const r of [
+   {method:'GET',route:'GET /notes',path:'/notes'},
+   {method:'GET',route:'GET /api/notes',path:'/api/notes'}
+  ]) await expect(r,'deny','route_not_allowed');
+  for(const [method,path,route] of [
+   ['POST','/api/notices','POST /api/notices'],
+   ['PUT','/api/notices/'+id,'PUT /api/notices/:id'],
+   ['PATCH','/api/notices/'+id,'PATCH /api/notices/:id'],
+   ['DELETE','/api/notices/'+id,'DELETE /api/notices/:id'],
+   ['PUT','/api/instructor-notices/'+id,'PUT /api/instructor-notices/:id']
+  ]) await expect({service:'notices',method,path,route},'deny','write_not_allowed');
+ }finally{
+  if(previous===undefined)delete process.env.ALEPH_RESOURCE_BINDINGS;
+  else process.env.ALEPH_RESOURCE_BINDINGS=previous;
+ }
+});
+
+test('submitted stage8 route config includes only scoped personal reads and no notice writes',()=>{
+ const config=JSON.parse(readFileSync(new URL('../aleph.config.json',import.meta.url),'utf8'));
+ assert.ok(config.allowedRoutes.includes('GET /api/my/notes'));
+ assert.ok(config.allowedRoutes.includes('GET /api/notes/:id'));
+ for(const forbidden of ['GET /api/notes','POST /api/notices','PUT /api/notices/:id'])
+  assert.ok(!config.allowedRoutes.includes(forbidden),forbidden);
+ assert.ok(!config.protectedReadRoutes.includes('GET /notes'));
+});
+
 test('unknown feature path and query-supplied action never authorize',async()=>{
  for(const x of [{path:'/notes/export'},{path:'/notes/other'},
   {path:'/notes/demo/export'},{path:'/notes/demo',queryLength:1},

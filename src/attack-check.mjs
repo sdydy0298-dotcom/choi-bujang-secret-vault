@@ -106,7 +106,7 @@ export async function runAttackChecks(config) {
       check('stage8_unknown_route_deny','export 기능 경로 거부',unknown==='deny',unknown),
       check('stage8_unauthorized_notices','비로그인 공지 API 거부',
         [401,403].includes(notice.status)&&!!noticeBody?.error,'HTTP '+notice.status),
-      check('stage8_owner_filtered_list_allowed','소유권 검사된 메모 목록 경로 허용',allNotes==='allow',allNotes),
+      check('stage8_global_notes_list_denied','전체 메모 목록 경로는 판정기에서 거부',allNotes==='deny',allNotes),
       check('stage8_notes_write_denied','타인 메모 수정 거부',crossUpdate==='deny',crossUpdate),
       check('stage8_student_notice_write_denied','학생 공지 수정 거부',noticeWrite==='deny',noticeWrite),
       check('stage8_own_note_update_allow','공식 가상 본인 PUT 허용',ownUpdate==='allow',ownUpdate),

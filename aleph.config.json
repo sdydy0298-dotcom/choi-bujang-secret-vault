@@ -11,21 +11,17 @@
   },
   "allowedRoutes": [
     "GET /api/my/notes",
-    "GET /api/notes",
     "POST /api/notes",
     "GET /api/notes/:id",
     "PUT /api/notes/:id",
     "DELETE /api/notes/:id",
     "GET /api/notices",
-    "POST /api/notices",
-    "GET /api/notices/:id",
-    "PUT /api/notices/:id"
+    "GET /api/notices/:id"
   ],
   "originalApiUrl": "https://gbhmupoxedmyphjnudhb.supabase.co/rest/v1/notes",
   "restoreRoute": null,
   "protectedServiceId": "notes",
   "protectedReadRoutes": [
-    "GET /notes",
     "GET /notes/:id"
   ]
 }
