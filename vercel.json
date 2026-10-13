@@ -16,7 +16,7 @@
   ],
   "functions": {
     "api/restore.js": {
-      "includeFiles": "recovery/stage9-safe-policy.json"
+      "includeFiles": "recovery/*.json"
     }
   }
 }
