@@ -96,8 +96,11 @@ export async function runAttackChecks(config) {
     const unknown=await test({path:'/notes/export'});
     const noticeWrite=await test({method:'PUT',route:'PUT /api/notices/:id',
       path:'/api/notices/11111111-1111-4111-8111-111111111111'});
-    const notice=await fetch(new URL('/api/notices',app),options);
-    const noticeBody=await readJson(notice);
+    const [notice,scopedList]=await Promise.all([
+      fetch(new URL('/api/notices',app),options),
+      fetch(new URL('/api/my/notes',app),options)
+    ]);
+    const [noticeBody,scopedBody]=await Promise.all([readJson(notice),readJson(scopedList)]);
     return [...httpChecks,...fixtures,
       check('stage8_known_zone_allow','공식 가상 자기 메모 GET 허용',own==='allow',own),
       check('stage8_unknown_route_deny','export 기능 경로 거부',unknown==='deny',unknown),
@@ -109,6 +112,8 @@ export async function runAttackChecks(config) {
       check('stage8_own_note_update_allow','공식 가상 본인 PUT 허용',ownUpdate==='allow',ownUpdate),
       check('stage8_cross_owner_read_denied','타인 단건 GET 거부',cross==='deny',cross),
       check('stage8_unmapped_list_denied','소유자 미등록 목록 거부',unboundList==='deny',unboundList),
+      check('stage8_scoped_list_unauthorized','비로그인 본인 목록 API 거부',
+        [401,403].includes(scopedList.status)&&!!scopedBody?.error,'HTTP '+scopedList.status),
       {attackId:'stage8_live_cross_owner',expected:'실제 A/B 사용자 간 메모 API 요청 확인',
        observed:'미실행: 심판 비공개 요청과 실제 운영 사용자 소유 관계 확인이 필요'}
     ];
