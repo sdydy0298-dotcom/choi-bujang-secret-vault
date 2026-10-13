@@ -3,6 +3,11 @@ on:
   push:
     paths:
       - .github/workflows/stage11-backdoor-audit.yml
+      - src/resource-zones.mjs
+      - src/device-approval.mjs
+      - api/notes/[id].js
+      - api/notices/[id].js
+      - api/device.js
   workflow_dispatch:
 permissions:
   contents: read
