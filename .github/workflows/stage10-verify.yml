@@ -1,4 +1,4 @@
-name: Stage 11 verification
+name: Stage 12 verification and submission bundle
 on:
   push:
     branches: [r5-work]
@@ -7,23 +7,53 @@ permissions:
   contents: read
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout inspected commit
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - name: Use Node 24
+        uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Stage 1-11 regression
-        run: npm run verify:11
-      - name: Build locally
+      - name: Fresh npm install (bonus criterion)
+        run: npm install
+      - name: Stage 1-12 complete regression
+        run: npm run verify:12
+      - name: Local sanitized public build
         run: npm run build -- --local
-      - name: Prepare stage 11 submission
-        run: npm run prepare:11
+      - name: Confirm Production points at this exact commit
+        shell: bash
+        env:
+          EXPECT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            if curl --silent --show-error --fail --max-time 12 \
+              'https://secret-vault-sdydy0298.vercel.app/aleph.json' \
+              --output /tmp/stage12-aleph.json; then
+              if node -e "const d=require('/tmp/stage12-aleph.json');process.exit(d.step===12&&d.commit===process.env.EXPECT_SHA?0:1)"; then
+                echo "PASS: public deployed commit equals GitHub SHA"
+                break
+              fi
+            fi
+            if [[ "${attempt}" == "20" ]]; then
+              echo "ERROR: production identity was not the submitted commit"
+              exit 1
+            fi
+            sleep 8
+          done
+      - name: Prepare truthful stage 12 submission
+        run: npm run prepare:12
       - name: Bundle submission
         run: npm run bundle
+      - name: Publish submission JSON (no secrets)
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage12-submission-${{ github.sha }}
+          path: artifacts/submission.json
+          if-no-files-found: error
+          retention-days: 7
