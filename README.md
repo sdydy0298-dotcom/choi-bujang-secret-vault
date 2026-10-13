@@ -1,5 +1,16 @@
 # BYTE BACK 방어전 시작 틀 R5
 
+## 11단계 저장점 · 서명된 승인 기기만 자료실 열기 (2026-10-13)
+
+- 10단계 **공식 통과 이후** 동일 저장소의 11단계만 추가했습니다. 10단계 정책 사본, 복원 API 및 기존 데이터는 유지합니다.
+- **제작 1:** PWA 설정은 public/manifest.webmanifest, public/icon.svg, public/sw.js, public/offline.html 입니다. 설치 버튼은 브라우저 웹앱 설치 기능일 뿐 기기 승인이 아닙니다. 오프라인 캐시는 안내문만 저장하며 보호 API 자료는 저장하지 않습니다.
+- **제작 2:** 로그인 후 기기 키쌍을 생성해 공개키만 POST /api/device 에 보내고 pending 상태를 확인합니다. DB 운영자 승인(approved)을 서버에서 확인하기 전에는 메모 목록과 추가/수정/삭제 화면이 열리지 않습니다. 승인 없이 직접 메모 API를 호출하면 403입니다.
+- **서명 경계:** 모든 메모·공지 보호 요청에 대해 메서드·요청 경로와 쿼리·본문 SHA-256·시각·nonce를 ECDSA P-256으로 서명합니다. 서버는 해당 소유자의 승인된 공개키와 서명을 확인하고 nonce 재사용을 차단합니다. 서명 없는 요청/경로 변경/본문 변경/재전송은 거부됩니다.
+- **저장 금지:** 개인키는 비내보내기 CryptoKey로 메모리에만, 로그인 세션은 persistSession:false로 메모리에만 보관합니다. 재시작 시 재등록·재승인이 필요한 세션 한정 방식이라는 제약을 명시합니다.
+- **서버 권한:** defense.device_approvals / defense.device_request_nonces 두 테이블을 기존 Supabase에 추가하고 RLS 및 anon/authenticated 직접 접근 금지를 적용했습니다. 계정이 승인 요청만 해서는 승인되지 않습니다.
+- **시험:** npm run verify:11 → npm run build -- --local → npm run prepare:11 → npm run bundle. GitHub Actions 통과는 실제 브라우저 승인과 공식 심판 점수를 뜻하지 않습니다.
+- **상세 절차:** docs/STAGE11_DEVICE.md. **배포:** https://secret-vault-sdydy0298.vercel.app · **GitHub:** https://github.com/sdydy0298-dotcom/choi-bujang-secret-vault.
+
 ## 10단계 복구 검증 · 10단계 범위만 적용
 
 - 검증된 정책 사본 `recovery/stage9-safe-policy.json`은 변경하지 않았습니다. 별도 `recovery/MANIFEST.json` 및 **코드 내 독립적인 고정 SHA-256(원본 파일 바이트·JSON 의미 값)** 두 가지를 모두 대조합니다. 사본 또는 목록 누락/변조 시 복구 전에 중단합니다. 통과 저장소는 10단계 최종 커밋까지만 참고했습니다.
