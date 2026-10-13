@@ -1,4 +1,4 @@
-import { createHash, createPublicKey, verify as verifySignature } from 'node:crypto';
+import { createHash, createHmac, createPublicKey, timingSafeEqual, verify as verifySignature } from 'node:crypto';
 import { getNoteScope } from './note-scope.mjs';
 
 const DEVICE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -37,11 +37,43 @@ export function verifyBoundSignature({ method, target, body, timestamp, nonce, s
   } catch { return false; }
 }
 
+// Existing stage-10 server-initiated judge-B retests still need to reach their
+// owner-scoped read routes. Only our RESTORE FUNCTION can mint this short-lived
+// proof with a server-only secret; never accept a caller-owned bypass flag.
+function permittedRestoreRetest(method,target,identity) {
+  return method === 'GET' && identity?.kind === 'judge' &&
+    identity.identity === 'b' && (
+      /^\/api\/notes\/[0-9a-f-]{36}$/u.test(target) ||
+      target === '/api/my/notes' || target === '/api/notices'
+    );
+}
+export function restoreRetestHmac(method,target,timestamp,nonce,secret) {
+  if (typeof secret !== 'string' || !secret) throw new Error('RESTORE_RETEST_SECRET_MISSING');
+  return createHmac('sha256',secret).update(
+    ['aleph.stage10.verified-retest.v1',method,target,timestamp,nonce].join('\n')).digest('hex');
+}
+function verifiedInternalRetest(req,identity) {
+  const h=req.headers??{};
+  const timestamp=h['x-aleph-retest-at'],nonce=h['x-aleph-retest-nonce'],digest=h['x-aleph-retest-proof'];
+  if (!/^[0-9]{13}$/u.test(timestamp??'') || !NONCE.test(nonce??'') ||
+      !/^[0-9a-f]{64}$/u.test(digest??'') ||
+      Math.abs(Date.now()-Number(timestamp))>30_000) return false;
+  let target;
+  try { const u=new URL(req.url,'https://invalid.example');target=u.pathname+u.search; }
+  catch { return false; }
+  if(!permittedRestoreRetest(req.method,target,identity))return false;
+  try{
+    const expected=restoreRetestHmac(req.method,target,timestamp,nonce,process.env.SUPABASE_SECRET_KEY);
+    return timingSafeEqual(Buffer.from(expected,'hex'),Buffer.from(digest,'hex'));
+  }catch{return false}
+}
+
 // Fail closed: an authenticated user and an approved public key are necessary.
 // The private signing key never leaves the caller's non-extractable in-memory CryptoKey.
 // Recording a nonce after signature verification makes exact replays fail.
 export async function requireApprovedDevice(request, identity, db) {
   const scope = getNoteScope(identity);
+  if (verifiedInternalRetest(request,identity)) return { ok: true, internalRetest: true };
   if (!scope) return { status: 403, error: 'DEVICE_SCOPE_FORBIDDEN' };
   const headers = request.headers ?? {};
   const id = headers['x-aleph-device-id'];
