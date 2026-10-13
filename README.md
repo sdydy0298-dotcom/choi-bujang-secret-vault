@@ -176,3 +176,13 @@ Supabase `defense.notes`는 RLS가 켜져 있습니다. `anon`에는 테이블 C
 5. 커밋 및 Production 배포 완료 후 `npm run prepare:7`, `npm run bundle` — 공개 HTTP 점검과 4개 가상 판정 결과를 기록하고, 운영 재로그인 실측은 미실행으로 남깁니다. `bundle-notes.json`과 생성된 `artifacts/submission.json`은 Git에 커밋하지 않습니다.
 
 실제 화면 확인: 기존 `https://secret-vault-sdydy0298.vercel.app` 주소와 테스트 계정이 유지되어야 합니다. 원래 로그인과 메모 CRUD는 이전 단계와 동일합니다.
+
+## 8단계 저장점 · 자료별 자원 구역 분리
+
+- 기존 1~7단계 메모·로그인·소유권 검사·UI는 보존했습니다. `defense.notes`와 강사 공지 `defense.notices`는 별도의 테이블이며, 공개 정적 메모에는 실제 자료가 없습니다.
+- 자원 ID: `note:<uuid>`, `notice:<uuid>`. 동작은 API 메서드와 정확한 경로로 결정하고 `?action=` 같은 쿼리로 고르지 않습니다. `export` 같은 기능 경로는 메모/:id 형식의 UUID와 구분해 거부합니다.
+- 판정기: `resource_zone`/ `route_not_allowed`/ `write_not_allowed`를 추가합니다. 미등록 기기는 6단계대로 거부하고 복합 위험은 7단계대로 재확인합니다. `aleph.decision.v1`에 사용자별 소유권 또는 강사 역할 필드가 없어서 이를 가짜 입력으로 만들지 않습니다.
+- API: 기존 `/api/notes`, `/api/notes/:id`는 서버가 검증한 `userId`로 `owner_id`를 필터링합니다. `/api/notices`와 `/api/notices/:id`는 별도 자원이며, 쓰기는 Supabase Auth Admin에서 조회한 `app_metadata.aleph_role === 'instructor'`인 인증 학생에게만 허용합니다. 기존 사용자 메타데이터/HTTP 헤더/요청 본문의 `role`은 권한이 아닙니다.
+- DB: `defense.notices`는 RLS ON, `anon`/`authenticated` 테이블 권한 없음, 서버 `service_role`만 읽기·생성·수정합니다. 강사 권한이 지정된 계정은 현재 없어, 역할을 임의로 부여하지 않았습니다.
+- 검증: `npm run test:r5`, `npm run test:6`, `npm run test:7`, `npm run test:8`, `npm run decider:test`, `npm run fixture:7`, `npm run build -- --local` 순으로 확인합니다. 빌드 후 `git status --short`에서 `public/data.json`만 수정됐으면 `git restore -- public/data.json` 한 뒤 `npm run prepare:8 && npm run bundle`을 수행합니다.
+- 미실행: 실제 A/B 교차 계정의 메모 API 직접 호출과 강사 권한 계정으로 공지 쓰기/수정은 인증정보를 공유하지 않으므로 심판 및 실제 테스트에서 별도 확인해야 합니다.

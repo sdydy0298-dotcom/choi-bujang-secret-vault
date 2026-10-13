@@ -12,7 +12,9 @@
     "test:6": "node --test test/step6.test.mjs",
     "prepare:6": "node scripts/prepare-stage6.mjs",
     "test:7": "node --test test/step7.test.mjs",
-    "prepare:7": "node scripts/prepare-stage7.mjs"
+    "prepare:7": "node scripts/prepare-stage7.mjs",
+    "test:8": "node --test test/step8.test.mjs",
+    "prepare:8": "node scripts/prepare-stage8.mjs"
   },
   "engines": {
     "node": ">=22"

@@ -27,8 +27,11 @@ test('미등록·확인 불충분은 fail closed',async()=>{
     {deviceRegistered:false}, {deviceRegistered:null}, {deviceRegistered:'true'},
     {deviceId:undefined}, {deviceId:'ABCDEF0123456789'}, {deviceId:'random'},
     {subjectId:' '}, {subjectId:null}, {schema:'other'},
-    {service:'other'}, {method:'POST'}, {route:'POST /notes'}, {route:'GET /secrets'},
+    {service:'other'},
   ]) await assertDecision(changes,'deny','device_not_registered');
+  for(const changes of [{method:'POST'},{route:'POST /notes'},{route:'GET /secrets'}]){
+    await assertDecision(changes,'deny','route_not_allowed');
+  }
 });
 
 const config={step:6,publicAppUrl:'https://secret-vault-sdydy0298.vercel.app',

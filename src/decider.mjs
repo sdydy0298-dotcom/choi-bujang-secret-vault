@@ -1,55 +1,26 @@
-// The ALEPH engine verifies the subject, device, and route before calling us.
-// Only the engine's decision-contract fields may influence this policy.
-export const RULE_IDS = Object.freeze(['device_registered', 'step_up_required']);
-
-const result = (request, decision, reasonCode, ruleId) => ({
-  schema: 'aleph.decision.v1',
-  requestId: request?.requestId,
-  decision,
-  reasonCode,
-  ruleIds: [ruleId],
+// Only accept claims validated by the ALEPH decision v1 engine.
+// The engine binds subject to device; API authorization also checks note ownership.
+export const RULE_IDS=Object.freeze(['device_registered','step_up_required','resource_zone','route_not_allowed','write_not_allowed']);
+const reply=(r,decision,reasonCode,ruleId)=>({schema:'aleph.decision.v1',requestId:r?.requestId,decision,reasonCode,ruleIds:[ruleId]});
+const routes=Object.freeze({
+ 'GET /notes':/^\/notes$/u,'GET /notes/:id':/^\/notes\/[^/?#]+$/u,
+ 'GET /api/notes':/^\/api\/notes$/u,'POST /api/notes':/^\/api\/notes$/u,
+ 'GET /api/notes/:id':/^\/api\/notes\/[0-9a-f-]{36}$/iu,
+ 'PUT /api/notes/:id':/^\/api\/notes\/[0-9a-f-]{36}$/iu,
+ 'DELETE /api/notes/:id':/^\/api\/notes\/[0-9a-f-]{36}$/iu,
+ 'GET /api/notices':/^\/api\/notices$/u,
+ 'GET /api/notices/:id':/^\/api\/notices\/[0-9a-f-]{36}$/iu,
+ 'POST /api/notices':/^\/api\/notices$/u,
+ 'PUT /api/notices/:id':/^\/api\/notices\/[0-9a-f-]{36}$/iu,
 });
-
-function verifiedFixtureRiskCount(request) {
-  const signals = request?.signals;
-  // Real engine signals currently report source 'none'; unknown/client-provided
-  // locations, network names, and times are NOT evidence of a safe or risky visit.
-  if (signals?.source !== 'judge_fixture') return 0;
-
-  let risk = 0;
-  if (signals.region === 'foreign') risk++;
-  if (signals.network === 'unusual') risk++;
-  if (Number.isInteger(signals.hour) && signals.hour >= 0 && signals.hour < 6) risk++;
-  // Only an engine-supplied, recent, counted risk event can add a fourth signal.
-  const recent = Array.isArray(request.recentEvents) && request.recentEvents.some(event =>
-    event?.kind === 'risk_signal'
-      && Number.isInteger(event.ageSeconds) && event.ageSeconds >= 0 && event.ageSeconds <= 900
-      && Number.isInteger(event.count) && event.count >= 10);
-  if (recent) risk++;
-  return risk;
-}
-
-function freshStepUp(request) {
-  const stepUp = request?.stepUp;
-  return stepUp?.verified === true && Number.isInteger(stepUp.authAgeSeconds)
-    && stepUp.authAgeSeconds >= 0 && stepUp.authAgeSeconds <= 900;
-}
-
-export async function decide(request) {
-  // Preserve stage 6: an unregistered device never reaches the risk rule.
-  if (request?.schema !== 'aleph.decision.v1'
-      || request.deviceRegistered !== true
-      || typeof request.subjectId !== 'string' || !request.subjectId.trim()
-      || typeof request.deviceId !== 'string' || !/^[a-f0-9]{16}$/u.test(request.deviceId)
-      || request.service !== 'notes' || request.method !== 'GET'
-      || !['GET /notes', 'GET /notes/:id'].includes(request.route)) {
-    return result(request, 'deny', 'device_not_registered', 'device_registered');
-  }
-
-  // Stage 7: a single unexpected region is not grounds for a permanent deny.
-  // Two or more validated synthetic warning signs require fresh login proof.
-  if (verifiedFixtureRiskCount(request) >= 2 && !freshStepUp(request)) {
-    return result(request, 'step_up', 'step_up_required', 'step_up_required');
-  }
-  return result(request, 'allow', 'approved', 'device_registered');
+function riskCount(r){const s=r?.signals;if(s?.source!=='judge_fixture')return 0;return Number(s.region==='foreign')+Number(s.network==='unusual')+Number(Number.isInteger(s.hour)&&s.hour>=0&&s.hour<6)+Number(Array.isArray(r.recentEvents)&&r.recentEvents.some(e=>e?.kind==='risk_signal'&&Number.isInteger(e.ageSeconds)&&e.ageSeconds>=0&&e.ageSeconds<=900&&Number.isInteger(e.count)&&e.count>=10))}
+function verified(r){return r?.stepUp?.verified===true&&Number.isInteger(r.stepUp.authAgeSeconds)&&r.stepUp.authAgeSeconds>=0&&r.stepUp.authAgeSeconds<=900}
+export async function decide(r){
+ if(r?.schema!=='aleph.decision.v1'||r.deviceRegistered!==true||typeof r.subjectId!=='string'||!r.subjectId.trim()||typeof r.deviceId!=='string'||!/^[a-f0-9]{16}$/u.test(r.deviceId)||r.service!=='notes')return reply(r,'deny','device_not_registered','device_registered');
+ const pattern=typeof r.route==='string'&&r.route.startsWith(r.method+' ')?routes[r.route]:null;
+ if(!pattern||typeof r.path!=='string'||!pattern.test(r.path)||(r.queryLength??0)!==0)return reply(r,'deny','route_not_allowed','route_not_allowed');
+ if(r.method!=='GET'&&r.route.includes('/notices'))return reply(r,'deny','write_not_allowed','write_not_allowed');
+ if(riskCount(r)>=2&&!verified(r))return reply(r,'step_up','step_up_required','step_up_required');
+ const legacy=r.route==='GET /notes'||r.route==='GET /notes/:id';
+ return reply(r,'allow','approved',legacy?'device_registered':'resource_zone');
 }

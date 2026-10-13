@@ -23,7 +23,7 @@ export async function runAttackChecks(config) {
       observed: exposed ? '확인 표시가 보임' : '확인 표시가 보이지 않음' }];
   }
 
-  if (![6, 7].includes(config.step)) throw new Error('현재 운영 자기점검은 6~7단계 저장점 기준입니다.');
+  if (![6, 7, 8].includes(config.step)) throw new Error('현재 운영 자기점검은 6~7단계 저장점 기준입니다.');
 
   const [page, notes, data, identity, authConfig] = await Promise.all([
     '/', '/api/notes', '/data.json', '/aleph.json', '/api/auth-config',
@@ -79,5 +79,17 @@ export async function runAttackChecks(config) {
     expected:'실제 운영 엔진에서 인증 전 메모 거부와 재로그인 뒤 새 요청 허용',
     observed:'미실행: 학생 서버에서는 엔진 재로그인 세션·시각을 실측할 수 없어 심판에 위임',
   };
+  if(config.step===8){
+    const known=await decide({schema:'aleph.decision.v1',requestId:'stage8-check',subjectId:'fixture',deviceId:'0123456789abcdef',deviceRegistered:true,service:'notes',method:'GET',route:'GET /api/notes',path:'/api/notes',queryLength:0,signals:{source:'none'},recentEvents:[]});
+    const wrong=await decide({schema:'aleph.decision.v1',requestId:'stage8-deny',subjectId:'fixture',deviceId:'0123456789abcdef',deviceRegistered:true,service:'notes',method:'GET',route:'GET /api/notes/:id',path:'/api/notes/export',queryLength:0,signals:{source:'none'},recentEvents:[]});
+    const notice=await fetch(new URL('/api/notices',app),options);
+    const noticeBody=await readJson(notice);
+    return [...httpChecks,...fixtures,
+      check('stage8_known_zone_allow','정상 구역 요청 허용',known.decision==='allow',known.decision),
+      check('stage8_unknown_route_deny','기능형 자원 경로 거부',wrong.decision==='deny','판정 '+wrong.decision),
+      check('stage8_unauthorized_notices','비로그인 강사 공지 API 거부',[401,403].includes(notice.status)&&!!noticeBody?.error,'HTTP '+notice.status),
+      {attackId:'stage8_live_cross_owner',expected:'A/B 교차 소유자·학생의 강사 공지 수정 직접 API 시험',observed:'미실행: 실제 시험 계정 토큰을 저장하지 않고 심판/시험 계정에서 확인'}
+    ];
+  }
   return [...httpChecks, ...fixtures, live];
 }
