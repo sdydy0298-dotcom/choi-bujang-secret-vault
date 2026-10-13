@@ -80,11 +80,24 @@ export async function runAttackChecks(config) {
     observed:'미실행: 학생 서버에서는 엔진 재로그인 세션·시각을 실측할 수 없어 심판에 위임',
   };
   if(config.step===8){
-    const known=await decide({schema:'aleph.decision.v1',requestId:'stage8-check',subjectId:'fixture',deviceId:'0123456789abcdef',deviceRegistered:true,service:'notes',method:'GET',route:'GET /api/notes',path:'/api/notes',queryLength:0,signals:{source:'none'},recentEvents:[]});
+    const known=await decide({schema:'aleph.decision.v1',requestId:'stage8-check',subjectId:'fixture',deviceId:'0123456789abcdef',deviceRegistered:true,service:'notes',method:'GET',route:'GET /api/my/notes',path:'/api/my/notes',queryLength:0,signals:{source:'none'},recentEvents:[]});
     const wrong=await decide({schema:'aleph.decision.v1',requestId:'stage8-deny',subjectId:'fixture',deviceId:'0123456789abcdef',deviceRegistered:true,service:'notes',method:'GET',route:'GET /api/notes/:id',path:'/api/notes/export',queryLength:0,signals:{source:'none'},recentEvents:[]});
     const notice=await fetch(new URL('/api/notices',app),options);
     const noticeBody=await readJson(notice);
+    // Regression: the engine v1 request has no trusted owner/role claim.
+    // Broad note lists and cross-zone writes must be rejected by the decider.
+    const stage8Request = (method,route,path) => ({
+      schema:'aleph.decision.v1',requestId:'s08-cross-zone-regression',
+      subjectId:'fixture',deviceId:'0123456789abcdef',deviceRegistered:true,
+      service:'notes',method,route,path,queryLength:0,signals:{source:'none'},recentEvents:[]
+    });
+    const allNotes=await decide(stage8Request('GET','GET /api/notes','/api/notes'));
+    const noteWrite=await decide(stage8Request('PUT','PUT /api/notes/:id','/api/notes/11111111-1111-4111-8111-111111111111'));
+    const noticeWrite=await decide(stage8Request('PUT','PUT /api/notices/:id','/api/notices/11111111-1111-4111-8111-111111111111'));
     return [...httpChecks,...fixtures,
+      check('stage8_all_notes_denied','구역 전체 메모 목록 판정 거부',allNotes.decision==='deny'&&allNotes.reasonCode==='route_not_allowed',allNotes.decision+'/'+allNotes.reasonCode),
+      check('stage8_notes_write_denied','소유자 정보 없는 메모 수정 요청 거부',noteWrite.decision==='deny'&&noteWrite.reasonCode==='write_not_allowed',noteWrite.decision+'/'+noteWrite.reasonCode),
+      check('stage8_student_notice_write_denied','역할 확인 없는 공지 수정 요청 거부',noticeWrite.decision==='deny'&&noticeWrite.reasonCode==='write_not_allowed',noticeWrite.decision+'/'+noticeWrite.reasonCode),
       check('stage8_known_zone_allow','정상 구역 요청 허용',known.decision==='allow',known.decision),
       check('stage8_unknown_route_deny','기능형 자원 경로 거부',wrong.decision==='deny','판정 '+wrong.decision),
       check('stage8_unauthorized_notices','비로그인 강사 공지 API 거부',[401,403].includes(notice.status)&&!!noticeBody?.error,'HTTP '+notice.status),

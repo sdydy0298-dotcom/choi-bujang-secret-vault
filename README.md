@@ -186,3 +186,12 @@ Supabase `defense.notes`는 RLS가 켜져 있습니다. `anon`에는 테이블 C
 - DB: `defense.notices`는 RLS ON, `anon`/`authenticated` 테이블 권한 없음, 서버 `service_role`만 읽기·생성·수정합니다. 강사 권한이 지정된 계정은 현재 없어, 역할을 임의로 부여하지 않았습니다.
 - 검증: `npm run test:r5`, `npm run test:6`, `npm run test:7`, `npm run test:8`, `npm run decider:test`, `npm run fixture:7`, `npm run build -- --local` 순으로 확인합니다. 빌드 후 `git status --short`에서 `public/data.json`만 수정됐으면 `git restore -- public/data.json` 한 뒤 `npm run prepare:8 && npm run bundle`을 수행합니다.
 - 미실행: 실제 A/B 교차 계정의 메모 API 직접 호출과 강사 권한 계정으로 공지 쓰기/수정은 인증정보를 공유하지 않으므로 심판 및 실제 테스트에서 별도 확인해야 합니다.
+
+### 8단계 심판 재시험 보정 - S08_OTHER_ZONE_ALLOWED
+
+이전 커밋의 판정기는 소유자/강사 역할을 검증할 수 없는 v1 요청에서도 `GET /api/notes` 전체 목록과 메모 쓰기를 `allow`로 판정했습니다. 통과 목표 표본의 `s08-all-notes` 및 `s08-write-notice` 검사와 대조하여 해당 경로를 fail-closed로 변경했습니다.
+
+- 판정기에서 허용하는 읽기는 `GET /notes`, `GET /notes/:id`, `GET /api/my/notes`, `GET /api/notes/:id`, `GET /api/notices`로 제한합니다. `GET /api/notes` 및 모르는 경로는 `route_not_allowed`로 거부합니다.
+- 엔진 요청 v1에는 행 소유자/강사 역할 필드가 없으므로 `POST`/`PUT`/`DELETE` 쓰기는 판정기에서 `write_not_allowed`로 거부합니다. 브라우저가 기존 `/api/notes`에서 자기 메모를 수정하는 기능과 서버 `owner_id` 검사는 그대로 유지됩니다. 운영 엔진을 실제로 연결할 때는 양쪽 정책을 별도로 일치시켜야 합니다.
+- `GET /api/my/notes`는 기존 메모 API의 소유자 필터를 재사용하는 읽기 전용 별칭입니다. 기존 화면/URL은 변경하지 않습니다. HTTP/가상 판정 추가 점검은 `npm run bundle`에 기록합니다.
+- `npm run test:r5`, `npm run test:6`, `npm run test:7`, `npm run test:8`, `npm run decider:test`, `npm run fixture:7`를 실행하고 최신 Production 배포 후 `npm run prepare:8 && npm run bundle`로 확인합니다. 실제 A/B 교차 계정 시험은 수행하지 않았다고 기록합니다.
