@@ -52,15 +52,40 @@ test('retests signed owner GET, forbidden anonymous GET and labels A not_run',as
      return new Response(JSON.stringify({error:'UNAUTHORIZED'}),{status:401});
    }
  });
- assert.equal(calls.length,5);
- assert.deepEqual(calls.map(x=>x.signed),[true,false,true,false,false]);
+ assert.equal(calls.length,7);
+ assert.deepEqual(calls.map(x=>x.signed),[true,false,true,false,false,true,false]);
  assert.equal(report.checks[0].outcome,'pass');
  assert.equal(report.checks[1].outcome,'pass');
  assert.equal(report.checks[2].outcome,'pass');
- assert.equal(report.checks[5].outcome,'not_run');
+ assert.equal(report.checks[5].outcome,'pass');
+ assert.equal(report.checks[6].outcome,'pass');
+ assert.equal(report.checks[7].outcome,'not_run');
  assert.equal(report.allExecutedPassed,true);
  assert.equal(JSON.stringify(report).includes('fixture-never-log'),false);
 });
+test('post-restore requests run concurrently without fabricated successes',{timeout:2500},async()=>{
+ let count=0;
+ let releaseFirst;
+ const held=new Promise(resolve=>{releaseFirst=resolve});
+ const report=await runPostRestoreChecks({
+  origin:'https://secret-vault-sdydy0298.vercel.app',
+  noteId:ID,token:'fixture-not-a-secret',
+  expectedBodySha256:bodySha256('before compromise'),
+  fetcher:async (_url,options)=>{
+   count++;
+   if(count===7)releaseFirst();
+   if(count===1)await held;
+   if(options.headers.Authorization)
+    return new Response(JSON.stringify({id:ID,body:'before compromise'}),{status:200});
+   return new Response(JSON.stringify({error:'UNAUTHORIZED'}),{status:401});
+  }
+ });
+ assert.equal(count,7);
+ assert.equal(report.allExecutedPassed,true);
+ assert.equal(report.checks.filter(x=>x.outcome==='pass').length,7);
+ assert.equal(report.unexecuted.length,1);
+});
+
 test('unavailable and incorrect HTTP observations cannot be marked PASS',async()=>{
  const failed=await runPostRestoreChecks({
    origin:'https://secret-vault-sdydy0298.vercel.app', noteId:ID,token:'not-a-real-token',
@@ -68,7 +93,7 @@ test('unavailable and incorrect HTTP observations cannot be marked PASS',async()
    fetcher:async()=>{throw Error('connection unavailable');}
  });
  assert.equal(failed.allExecutedPassed,false);
- assert.equal(failed.checks.filter(x=>x.outcome==='fail').length,5);
+ assert.equal(failed.checks.filter(x=>x.outcome==='fail').length,7);
  await assert.rejects(()=>runPostRestoreChecks({
    origin:'https://evil.example',noteId:ID,token:'token',
    expectedBodySha256:bodySha256('x')
