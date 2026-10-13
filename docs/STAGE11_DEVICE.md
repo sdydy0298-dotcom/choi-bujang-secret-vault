@@ -4,7 +4,7 @@
 
 - 1~10단계의 자료·정책 파일은 유지하고 기존 화면에 웹앱 manifest, 아이콘, 오프라인 안내를 추가합니다.
 - 웹앱 설치 표시는 기기 승인 증거가 아니며, Service Worker는 오프라인 안내문만 캐시합니다.
-- 브라우저의 Supabase 세션은 persistSession:false 및 autoRefreshToken:false입니다. JWT와 개인키를 localStorage, sessionStorage, IndexedDB 등에 넣지 않습니다.
+- 브라우저의 Supabase Auth REST 로그인은 같은 출처 `/auth-client.js`가 처리하며 세션은 JavaScript 메모리에만 보관합니다. JWT와 개인키를 localStorage, sessionStorage, IndexedDB 등에 넣지 않습니다. 외부 jsDelivr CDN 없이도 초기화됩니다.
 - ECDSA P-256 비내보내기 CryptoKey 개인키는 페이지 메모리에서만 유지됩니다. **새로고침이나 창 닫기 후에는 재등록·재승인이 필요한 실습 제한**이 있습니다.
 
 ## 기기 승인 흐름
