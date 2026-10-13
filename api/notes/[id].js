@@ -1,3 +1,4 @@
+import { requireApprovedDevice } from '../../src/device-approval.mjs';
 import { createClient } from '@supabase/supabase-js';
 import config from '../../aleph.config.json' with { type: 'json' };
 import { resourceId, idFromPath } from '../../src/resource-zones.mjs';
@@ -74,6 +75,8 @@ export default async function handler(request, response) {
   if (!getNoteScope(identity)) return sendJson(response, 403, { error: 'NOTE_SCOPE_NOT_ALLOWED' });
 
   const supabase = serverClient(supabaseUrl, supabaseSecretKey);
+  const device = await requireApprovedDevice(request, identity, supabase);
+  if (!device.ok) return sendJson(response, device.status, { error: device.error });
 
   if (request.method === 'GET') {
     const { data, error } = await scopedNoteQuery(supabase
