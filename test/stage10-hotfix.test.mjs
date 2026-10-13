@@ -52,11 +52,12 @@ test('retests signed owner GET, forbidden anonymous GET and labels A not_run',as
      return new Response(JSON.stringify({error:'UNAUTHORIZED'}),{status:401});
    }
  });
- assert.equal(calls.length,2);
- assert.deepEqual(calls.map(x=>x.signed),[true,false]);
+ assert.equal(calls.length,5);
+ assert.deepEqual(calls.map(x=>x.signed),[true,false,true,false,false]);
  assert.equal(report.checks[0].outcome,'pass');
  assert.equal(report.checks[1].outcome,'pass');
- assert.equal(report.checks[2].outcome,'not_run');
+ assert.equal(report.checks[2].outcome,'pass');
+ assert.equal(report.checks[5].outcome,'not_run');
  assert.equal(report.allExecutedPassed,true);
  assert.equal(JSON.stringify(report).includes('fixture-never-log'),false);
 });
@@ -67,7 +68,7 @@ test('unavailable and incorrect HTTP observations cannot be marked PASS',async()
    fetcher:async()=>{throw Error('connection unavailable');}
  });
  assert.equal(failed.allExecutedPassed,false);
- assert.equal(failed.checks.filter(x=>x.outcome==='fail').length,2);
+ assert.equal(failed.checks.filter(x=>x.outcome==='fail').length,5);
  await assert.rejects(()=>runPostRestoreChecks({
    origin:'https://evil.example',noteId:ID,token:'token',
    expectedBodySha256:bodySha256('x')
