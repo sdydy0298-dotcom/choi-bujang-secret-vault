@@ -26,7 +26,7 @@ export async function runAttackChecks(config) {
       observed: exposed ? '확인 표시가 보임' : '확인 표시가 보이지 않음' }];
   }
 
-  if (![6, 7, 8, 9, 10, 11].includes(config.step)) throw new Error('현재 운영 자기점검은 6~9단계 저장점을 지원합니다.');
+  if (![6, 7, 8, 9, 10, 11, 12].includes(config.step)) throw new Error('현재 운영 자기점검은 6~12단계 저장점을 지원합니다.');
 
   const [page, notes, data, identity, authConfig] = await Promise.all([
     '/', '/api/notes', '/data.json', '/aleph.json', '/api/auth-config',
