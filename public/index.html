@@ -116,11 +116,42 @@
     <ul id="notes" aria-live="polite"><li>로그인 상태를 확인하는 중입니다.</li></ul>
   </main>
 
+  <script>
+    // Separate from the module: a failed module load still leaves a boot marker.
+    // The random traceId lives only until this page is closed.
+    (() => {
+      if (!globalThis.crypto?.randomUUID) return;
+      const traceId = crypto.randomUUID();
+      const allowed = new Set([
+        'html_loaded','module_started','auth_config_loaded','auth_config_failed',
+        'auth_ready','login_attempt','login_succeeded','login_failed',
+        'device_keygen_started','device_keygen_failed','device_request_started',
+        'device_request_succeeded','device_request_failed','device_status_requested',
+        'device_approved','device_pending','device_status_failed',
+        'notes_request_started','notes_request_succeeded','notes_request_failed'
+      ]);
+      window.stage11Trace = event => {
+        if (!allowed.has(event)) return;
+        // Fixed event code + random page trace; NEVER send credentials or contents.
+        const url='/api/auth-config?stage11='+encodeURIComponent(event)
+          +'&traceId='+encodeURIComponent(traceId);
+        void fetch(url,{method:'GET',cache:'no-store',credentials:'same-origin',
+          keepalive:true}).catch(()=>{});
+      };
+      window.stage11Trace('html_loaded');
+    })();
+  </script>
   <script type="module">
     import { createClient } from '/auth-client.js';
+    const trace = event => window.stage11Trace?.(event);
+    trace('module_started');
 
     const authConfigResponse = await fetch('/api/auth-config', { cache: 'no-store' });
-    if (!authConfigResponse.ok) throw new Error('인증 설정을 불러올 수 없습니다.');
+    if (!authConfigResponse.ok) {
+      trace('auth_config_failed');
+      throw new Error('인증 설정을 불러올 수 없습니다.');
+    }
+    trace('auth_config_loaded');
     const authConfig = await authConfigResponse.json();
     // Login and refresh state stay in memory only. Nothing is persisted in browser storage.
     const supabase = createClient(authConfig.url, authConfig.publishableKey);
@@ -245,16 +276,22 @@
     deviceRequest.addEventListener('click',async()=>{
       if(pendingDevice) return;
       deviceRequest.disabled=true;
+      trace('device_keygen_started');
+      let requestStarted=false;
       showMessage(deviceMessage,'서명용 키를 생성하고 승인 요청하는 중입니다.');
       try {
         const pair=await crypto.subtle.generateKey(
           {name:'ECDSA',namedCurve:'P-256'},false,['sign','verify']);
         const publicKey=await crypto.subtle.exportKey('jwk',pair.publicKey);
+        trace('device_request_started');
+        requestStarted=true;
         const result=await deviceApi('/api/device',{method:'POST',
           body:JSON.stringify({label:deviceLabel.value.trim()||'내 접속 기기',publicKey})});
+        trace('device_request_succeeded');
         pendingDevice={id:result.deviceId,privateKey:pair.privateKey};
         updateDeviceState('pending','승인 요청 완료. 운영자 확인 뒤 상태 새로 확인을 누르세요.');
       } catch(error){
+        trace(requestStarted?'device_request_failed':'device_keygen_failed');
         showMessage(deviceMessage,error.message,true);
         deviceRequest.disabled=false;
       }
@@ -262,21 +299,27 @@
 
     deviceRefresh.addEventListener('click',async()=>{
       if(!pendingDevice)return;
+      trace('device_status_requested');
       deviceRefresh.disabled=true;
       try{
         const status=await deviceApi('/api/device?id='+encodeURIComponent(pendingDevice.id));
         if(status.status==='approved'){
+          trace('device_approved');
           approvedDevice=pendingDevice;
           updateDeviceState('approved','서버 승인 완료. 요청마다 경로·본문·시각을 개인키로 서명합니다.');
           await loadNotes();
         }else{
+          if(status.status==='pending') trace('device_pending');
           if(status.status==='revoked'||status.status==='rejected'){
             approvedDevice=null;
             pendingDevice=null;
           }
           updateDeviceState(status.status,'서버 확인 결과: '+status.status);
         }
-      }catch(error){showMessage(deviceMessage,error.message,true)}
+      }catch(error){
+        trace('device_status_failed');
+        showMessage(deviceMessage,error.message,true);
+      }
       finally{deviceRefresh.disabled=!pendingDevice}
     });
 
@@ -401,7 +444,9 @@
         return;
       }
       try {
+        trace('notes_request_started');
         const data = await api('/api/my/notes');
+        trace('notes_request_succeeded');
         if (!Array.isArray(data.notes)) throw new Error('자료 형식이 맞지 않습니다.');
         if (!data.notes.length) {
           renderNotesMessage('등록된 가상 메모가 없습니다.');
@@ -409,6 +454,7 @@
         }
         list.replaceChildren(...data.notes.map(noteElement));
       } catch (error) {
+        trace('notes_request_failed');
         renderNotesMessage(error.message);
       }
     }
@@ -439,6 +485,7 @@
     loginForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       loginButton.disabled = true;
+      trace('login_attempt');
       showMessage(authMessage, '로그인 확인 중입니다.');
 
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -448,11 +495,13 @@
 
       loginButton.disabled = false;
       if (error) {
+        trace('login_failed');
         renderSession(null);
         showMessage(authMessage, '로그인 실패: ' + error.message, true);
         return;
       }
 
+      trace('login_succeeded');
       renderSession(data.session);
       showMessage(authMessage, '로그인되었습니다.');
     });
@@ -494,6 +543,7 @@
     supabase.auth.onAuthStateChange((_event, session) => renderSession(session));
 
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    trace('auth_ready');
     if (sessionError) {
       renderSession(null);
       showMessage(authMessage, '로그인 상태 확인 실패: ' + sessionError.message, true);
