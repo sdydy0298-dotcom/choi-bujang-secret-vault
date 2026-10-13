@@ -4,6 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BYTE BACK | 인증된 자료실</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <meta name="theme-color" content="#101a28">
+  <meta name="description" content="기기 승인과 요청별 전자서명으로 보호하는 개인 자료실">
   <style>
     :root { color-scheme: dark; font-family: system-ui, sans-serif; }
     * { box-sizing: border-box; }
@@ -41,6 +45,11 @@
     .actions button { font-size: 14px; padding: 9px 12px; }
     .edit-form { margin-top: 14px; }
     [hidden] { display: none !important; }
+    .device-note { font-size: 14px; color: #bfd0e5; margin: 8px 0 12px; }
+    .device-chip { display: inline-block; border-radius: 999px; border: 1px solid #51667c; padding: 5px 11px; }
+    .device-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .device-controls input { max-width: 270px; }
+    .app-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
   </style>
 </head>
 <body>
@@ -77,6 +86,19 @@
       <p id="auth-message" class="message" role="status" aria-live="polite"></p>
     </section>
 
+    <section id="device-panel" class="panel" aria-labelledby="device-title" hidden>
+      <div class="head"><strong id="device-title">기기 승인</strong><span id="device-state" class="state device-chip">미등록</span></div>
+      <p class="device-note">앱을 설치하거나 로그인해도 이 기기는 자동 승인되지 않습니다. 운영자가 승인한 기기만 서명된 요청으로 자료를 볼 수 있습니다.</p>
+      <div class="device-controls">
+        <input id="device-label" aria-label="기기 이름" maxlength="60" value="내 접속 기기" placeholder="기기 이름">
+        <button id="device-request" type="button">기기 승인 요청</button>
+        <button id="device-refresh" type="button" class="secondary" disabled>승인 상태 새로 확인</button>
+      </div>
+      <p id="device-message" class="message" role="status" aria-live="polite">승인 전에는 보호 자료를 표시하지 않습니다.</p>
+      <div class="app-actions"><button id="install-app" type="button" class="secondary" hidden>이 기기에 웹앱 설치</button></div>
+      <p class="device-note">기기 개인키와 로그인 토큰은 브라우저 영구 저장소에 넣지 않고 현재 페이지 메모리에서만 사용합니다. 새로고침하거나 창을 닫으면 다시 승인 요청이 필요합니다. 오프라인에서는 자료를 열 수 없습니다.</p>
+    </section>
+
     <section id="note-create" class="panel note-create" aria-labelledby="create-title">
       <div class="head"><strong id="create-title">새 가상 메모</strong></div>
       <form id="create-form">
@@ -100,7 +122,9 @@
     const authConfigResponse = await fetch('/api/auth-config', { cache: 'no-store' });
     if (!authConfigResponse.ok) throw new Error('인증 설정을 불러올 수 없습니다.');
     const authConfig = await authConfigResponse.json();
-    const supabase = createClient(authConfig.url, authConfig.publishableKey);
+    const supabase = createClient(authConfig.url, authConfig.publishableKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    });
 
     const loginForm = document.querySelector('#login-form');
     const emailInput = document.querySelector('#email');
@@ -117,8 +141,18 @@
     const noteBody = document.querySelector('#note-body');
     const noteMessage = document.querySelector('#note-message');
     const list = document.querySelector('#notes');
+    const devicePanel = document.querySelector('#device-panel');
+    const deviceState = document.querySelector('#device-state');
+    const deviceMessage = document.querySelector('#device-message');
+    const deviceLabel = document.querySelector('#device-label');
+    const deviceRequest = document.querySelector('#device-request');
+    const deviceRefresh = document.querySelector('#device-refresh');
+    const installButton = document.querySelector('#install-app');
 
     let currentSession = null;
+    let approvedDevice = null;
+    let pendingDevice = null;
+    let installPrompt = null;
 
     function showMessage(target, message = '', isError = false) {
       target.textContent = message;
@@ -137,13 +171,60 @@
       return headers;
     }
 
+    const textBytes = value => new TextEncoder().encode(value);
+    const hex = bytes => Array.from(new Uint8Array(bytes), x=>x.toString(16).padStart(2,'0')).join('');
+    const base64url = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes)))
+      .replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
+
+    function updateDeviceState(status, message) {
+      deviceState.textContent = status==='approved' ? '승인됨'
+        : status==='pending' ? '승인 대기' : status==='revoked' ? '승인 취소' : '미등록';
+      showMessage(deviceMessage,message);
+      deviceRequest.disabled = Boolean(pendingDevice);
+      deviceRefresh.disabled = !pendingDevice;
+      createPanel.dataset.visible = String(Boolean(currentSession && approvedDevice));
+      if (!approvedDevice) renderNotesMessage('기기 승인 전에는 보호 자료를 표시하지 않습니다.');
+    }
+
+    async function deviceApi(path, options={}) {
+      if (!currentSession?.access_token) throw new Error('로그인이 필요합니다.');
+      const response=await fetch(path,{
+        cache:'no-store',...options,
+        headers:{...authHeaders(currentSession,Boolean(options.body)),...(options.headers??{})}
+      });
+      const data=await response.json().catch(()=>null);
+      if(!response.ok) throw new Error(data?.error??'기기 승인 서비스에 연결할 수 없습니다.');
+      return data;
+    }
+
+    async function signedHeaders(path,options) {
+      if (!approvedDevice?.privateKey) throw new Error('기기 승인이 필요합니다.');
+      const method=(options.method??'GET').toUpperCase();
+      const url=new URL(path,location.origin);
+      if(url.origin!==location.origin) throw new Error('외부 자료 요청은 허용되지 않습니다.');
+      const target=url.pathname+url.search;
+      const body=options.body==null?'':String(options.body);
+      const bodyDigest=hex(await crypto.subtle.digest('SHA-256',textBytes(body)));
+      const timestamp=String(Date.now());
+      const nonce=hex(crypto.getRandomValues(new Uint8Array(16)));
+      const message=[method,target,bodyDigest,timestamp,nonce].join('\n');
+      const signed=await crypto.subtle.sign(
+        {name:'ECDSA',hash:'SHA-256'},approvedDevice.privateKey,textBytes(message));
+      return {'X-Aleph-Device-Id':approvedDevice.id,
+        'X-Aleph-Timestamp':timestamp,'X-Aleph-Nonce':nonce,
+        'X-Aleph-Signature':base64url(signed)};
+    }
+
     async function api(path, options = {}) {
       if (!currentSession?.access_token) throw new Error('로그인이 필요합니다.');
+      if (!approvedDevice) throw new Error('운영자의 기기 승인이 필요합니다.');
+      const signature=await signedHeaders(path,options);
       const response = await fetch(path, {
         cache: 'no-store',
         ...options,
         headers: {
           ...authHeaders(currentSession, Boolean(options.body)),
+          ...signature,
           ...(options.headers ?? {}),
         },
       });
@@ -151,11 +232,69 @@
       try { data = await response.json(); } catch {}
       if (!response.ok) {
         if (response.status === 401) throw new Error('로그인 확인에 실패했습니다. 다시 로그인해 주세요.');
+        if (response.status === 403 || response.status === 409) {
+          approvedDevice=null;
+          updateDeviceState('revoked','기기 승인 또는 요청 서명이 거부됐습니다. 다시 승인받아 주세요.');
+          throw new Error(data?.error??'기기 승인이 확인되지 않았습니다.');
+        }
         if (response.status === 404) throw new Error('메모를 찾을 수 없습니다.');
         throw new Error(data?.error ?? '자료 요청에 실패했습니다.');
       }
       return data;
     }
+
+    deviceRequest.addEventListener('click',async()=>{
+      if(pendingDevice) return;
+      deviceRequest.disabled=true;
+      showMessage(deviceMessage,'서명용 키를 생성하고 승인 요청하는 중입니다.');
+      try {
+        const pair=await crypto.subtle.generateKey(
+          {name:'ECDSA',namedCurve:'P-256'},false,['sign','verify']);
+        const publicKey=await crypto.subtle.exportKey('jwk',pair.publicKey);
+        const result=await deviceApi('/api/device',{method:'POST',
+          body:JSON.stringify({label:deviceLabel.value.trim()||'내 접속 기기',publicKey})});
+        pendingDevice={id:result.deviceId,privateKey:pair.privateKey};
+        updateDeviceState('pending','승인 요청 완료. 운영자 확인 뒤 상태 새로 확인을 누르세요.');
+      } catch(error){
+        showMessage(deviceMessage,error.message,true);
+        deviceRequest.disabled=false;
+      }
+    });
+
+    deviceRefresh.addEventListener('click',async()=>{
+      if(!pendingDevice)return;
+      deviceRefresh.disabled=true;
+      try{
+        const status=await deviceApi('/api/device?id='+encodeURIComponent(pendingDevice.id));
+        if(status.status==='approved'){
+          approvedDevice=pendingDevice;
+          updateDeviceState('approved','서버 승인 완료. 요청마다 경로·본문·시각을 개인키로 서명합니다.');
+          await loadNotes();
+        }else{
+          if(status.status==='revoked'||status.status==='rejected'){
+            approvedDevice=null;
+            pendingDevice=null;
+          }
+          updateDeviceState(status.status,'서버 확인 결과: '+status.status);
+        }
+      }catch(error){showMessage(deviceMessage,error.message,true)}
+      finally{deviceRefresh.disabled=!pendingDevice}
+    });
+
+    window.addEventListener('beforeinstallprompt',event=>{
+      event.preventDefault();
+      installPrompt=event;
+      installButton.hidden=false;
+    });
+    installButton.addEventListener('click',async()=>{
+      if(!installPrompt)return;
+      installPrompt.prompt();
+      await installPrompt.userChoice;
+      installPrompt=null;
+      installButton.hidden=true;
+    });
+    if('serviceWorker' in navigator)
+      window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
 
     function noteElement(note) {
       const item = document.createElement('li');
@@ -258,8 +397,8 @@
     }
 
     async function loadNotes() {
-      if (!currentSession) {
-        renderNotesMessage('로그인 후 가상 자료를 볼 수 있습니다.');
+      if (!currentSession || !approvedDevice) {
+        renderNotesMessage('로그인 후 서버에서 승인된 기기에서만 자료를 볼 수 있습니다.');
         return;
       }
       try {
@@ -276,12 +415,18 @@
     }
 
     function renderSession(session) {
+      const ownerChanged = currentSession?.user?.id !== session?.user?.id;
+      if(ownerChanged){approvedDevice=null;pendingDevice=null;}
       currentSession = session ?? null;
       const loggedIn = Boolean(currentSession?.user);
 
       loginForm.hidden = loggedIn;
       sessionBox.dataset.visible = String(loggedIn);
-      createPanel.dataset.visible = String(loggedIn);
+      devicePanel.hidden = !loggedIn;
+      createPanel.dataset.visible = String(loggedIn && Boolean(approvedDevice));
+      if(ownerChanged) updateDeviceState('none',loggedIn
+        ? '이 세션의 기기를 등록하고 운영자 승인을 기다려 주세요.'
+        : '로그인 후 기기를 등록할 수 있습니다.');
       sessionEmail.textContent = currentSession?.user?.email ?? '';
       authState.textContent = loggedIn ? '로그인됨' : '로그아웃됨';
 
