@@ -104,7 +104,7 @@ test('stage10 submission self-check retains prior protections within 20 cases',a
       return json({error:'UNAUTHORIZED'},401);
     case '/api/restore':assert.equal(options.method,'POST');return json({error:'UNAUTHORIZED'},401);
     case '/data.json':return json({notes:[]});
-    case '/aleph.json':return json({step:10,repoUrl:config.repoUrl,
+    case '/aleph.json':return json({step:config.step,repoUrl:config.repoUrl,
       commit:'a'.repeat(40),allowedRoutes:config.allowedRoutes,
       originalApiUrl:config.originalApiUrl});
     case '/api/auth-config':return json({url:'https://fixture.example',publishableKey:'fixture-public'});
