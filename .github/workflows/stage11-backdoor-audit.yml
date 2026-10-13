@@ -26,6 +26,9 @@ jobs:
               echo "${host} ${method} ${path}: ${status}"
               if [[ "${status}" != "401" ]]; then
                 echo "FAIL: public sensitive endpoint did not reject unauthenticated request"
+                echo 'Safe error-body preview (never log headers or tokens):'
+                head -c 300 /tmp/aleph-backdoor-reply
+                echo
                 exit 1
               fi
               if ! grep -q 'UNAUTHORIZED' /tmp/aleph-backdoor-reply; then
