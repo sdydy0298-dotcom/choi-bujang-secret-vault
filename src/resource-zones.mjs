@@ -9,10 +9,7 @@ export function idFromPath(req,collection){
   let url;
   try{url=new URL(req.url,'https://resource.invalid')}catch{return null}
   if(url.hash)return null;
-  const m=new RegExp('^/api/'+collection+'/([0-9a-f-]{36})
-export function isVerifiedInstructor(identity,user){return identity?.kind==='student'&&typeof identity.userId==='string'&&identity.userId===user?.id&&user?.app_metadata?.aleph_role==='instructor'}
-export function safeContent(body){if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).sort().join(',')!=='body,title'||typeof body.title!=='string'||!body.title.trim()||body.title.length>200||typeof body.body!=='string'||body.body.length>5000)return null;return {title:body.title.trim(),content:body.body}}
-,'iu').exec(url.pathname);
+  const m=new RegExp('^/api/'+collection+'/([0-9a-f-]{36})$','iu').exec(url.pathname);
   if(!m||!UUID.test(m[1]))return null;
   if(url.search){
     const entries=[...url.searchParams.entries()];
