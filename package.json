@@ -22,7 +22,10 @@
     "test:10": "node --test test/step10.test.mjs test/stage10-hotfix.test.mjs",
     "prepare:10": "node scripts/prepare-stage10.mjs",
     "policy:10": "node scripts/stage10-policy.mjs",
-    "verify:10": "npm run verify:9 && npm run test:10"
+    "verify:10": "npm run verify:9 && npm run test:10",
+    "test:11": "node --test test/step11.test.mjs",
+    "verify:11": "npm run verify:10 && npm run test:11",
+    "prepare:11": "node scripts/prepare-stage11.mjs"
   },
   "engines": {
     "node": ">=22"
