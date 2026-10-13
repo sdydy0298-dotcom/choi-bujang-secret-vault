@@ -1,5 +1,15 @@
 # BYTE BACK 방어전 시작 틀 R5
 
+## 10단계 저장점 · SQL/API 해시 계약 일치 (2026-10-13)
+
+- 공개 `/aleph.json`에 빠져 있던 `restoreRoute`를 추가하고, Production의 `publicAppUrl`을 JWT audience·재시험과 같은 설정 주소로 일치시켰습니다.
+- 저장소 SQL은 제목+본문 해시를 `content_sha256`으로 반환했지만 API는 본문 해시를 요구했습니다. 실제 DB 트랜잭션에서 이전 SQL의 API 해시 비교 실패를 재현하고 수정했습니다.
+- `sql/stage10-recovery.sql`은 본문 해시와 제목+본문 봉인 해시를 분리하며, 기존 백업/감사 기록은 수정하지 않습니다. 운영 DB에는 이미 같은 해시 계약이 적용되어 있어 이번 작업에서 영구 DB 변경은 하지 않았습니다.
+- `test/stage10-database.sql`: 수정 SQL 적용 후 변조/삭제 복구, ID·소유자·해시, 타 소유자 거부, 다른 메모 보존 및 감사 추가를 실제 Supabase 트랜잭션에서 확인하고 ROLLBACK했습니다. JWT를 통한 Production 복구 및 공식 재시험 성공을 뜻하지 않습니다.
+- 복구 API는 고정 이벤트명·HTTP 상태·오류 코드만 로그에 남깁니다. 토큰·메모·사용자 ID는 기록하지 않습니다.
+- 마지막 공식 판정은 `7016c15f47eb`, 36/100, `S10_RESTORE_MISMATCH`, `S10_RETEST_MISSING`입니다. 이 수정의 공식 결과는 미확인입니다.
+- 재현: `npm run verify:10` → `npm run build -- --local` → `npm run prepare:10` → `npm run bundle`.
+
 ## 10단계 공식 심판 실패 항목 보완 (2026-10-13)
 
 - 실제 `POST /api/restore` 요청마다 9단계 정책 사본을 재읽고 고정 SHA-256 및 현재 허용 경로 차이를 검사합니다. 실패 시 DB를 수정하기 전에 중단합니다.

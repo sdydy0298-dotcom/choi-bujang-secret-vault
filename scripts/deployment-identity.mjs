@@ -23,7 +23,16 @@ export function deploymentIdentity(env, config) {
   const owner = env.VERCEL_GIT_REPO_OWNER;
   const repo = env.VERCEL_GIT_REPO_SLUG;
   const commit = env.VERCEL_GIT_COMMIT_SHA;
-  const host = env.VERCEL_URL;
+  // Production metadata must use the same origin as JWT audience and retests.
+  // A per-deployment preview hostname may be protected by Vercel authentication.
+  const production = env.VERCEL_ENV === 'production';
+  let host = env.VERCEL_URL;
+  if (production && config?.step >= 3) {
+    if (!validHttpsUrl(config.publicAppUrl)) throw new Error('Invalid production app origin');
+    const app = new URL(config.publicAppUrl);
+    if (app.pathname !== '/' || app.port) throw new Error('Invalid production app origin');
+    host = app.hostname;
+  }
 
   const baseValid = env.VERCEL_GIT_PROVIDER === 'github'
     && OWNER.test(owner || '')
@@ -41,7 +50,8 @@ export function deploymentIdentity(env, config) {
   const stage3Valid = config?.step < 3 || validRoutes(config.allowedRoutes);
   const stage5Valid = config?.step < 5 || validHttpsUrl(config.originalApiUrl);
 
-  if (!baseValid || !stage3Valid || !stage5Valid) {
+  const stage10Valid = config?.step < 10 || config.restoreRoute === '/api/restore';
+  if (!baseValid || !stage3Valid || !stage5Valid || !stage10Valid) {
     throw new Error('배포 식별 정보를 확인할 수 없습니다. Vercel 시스템 환경변수와 현재 단계 설정을 확인하세요.');
   }
 
@@ -55,5 +65,6 @@ export function deploymentIdentity(env, config) {
     sampleMarker: config.sampleMarker,
     ...(config.step >= 3 ? { allowedRoutes: config.allowedRoutes } : {}),
     ...(config.step >= 5 ? { originalApiUrl: config.originalApiUrl } : {}),
+    ...(config.step >= 10 ? { restoreRoute: config.restoreRoute } : {}),
   };
 }

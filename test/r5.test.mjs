@@ -71,3 +71,16 @@ test('stage 5 identity includes routes and original API URL', () => {
   assert.throws(() => deploymentIdentity(env, { ...stage5Config, originalApiUrl: null }));
   assert.throws(() => deploymentIdentity(env, { ...stage5Config, allowedRoutes: [] }));
 });
+
+
+test('stage 10 publishes recovery route and production JWT origin', () => {
+  const recovery = { ...config, step: 10,
+    allowedRoutes: ['POST /api/restore'], restoreRoute: '/api/restore',
+    originalApiUrl: 'https://project.supabase.co/rest/v1/notes' };
+  const published = deploymentIdentity({ ...env, VERCEL_ENV: 'production' }, recovery);
+  assert.equal(published.publicAppUrl, recovery.publicAppUrl);
+  assert.equal(published.restoreRoute, '/api/restore');
+  assert.equal(deploymentIdentity({ ...env, VERCEL_ENV: 'preview' }, recovery).publicAppUrl,
+    'https://' + env.VERCEL_URL);
+  assert.throws(() => deploymentIdentity(env, { ...recovery, restoreRoute: undefined }));
+});

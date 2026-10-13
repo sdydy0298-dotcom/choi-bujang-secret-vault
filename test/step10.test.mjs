@@ -106,7 +106,9 @@ test('restore route: only signed B can restore its own one row',async()=>{
   .replace('export default async function handler','async function handler');
  const identity={kind:'judge',identity:'b',userId:OWNER,ownerId:OWNER,runId:RUN};
  const backup={note_id:ID,owner_id:OWNER,judge_run_id:RUN,judge_identity:'b',
-   title:'clean',content:'clean note',content_sha256:noteContentHash('clean','clean note'),
+   title:'clean',content:'clean note',
+   content_sha256:createHash('sha256').update('clean note').digest('hex'),
+   sealed_backup_sha256:noteContentHash('clean','clean note'),
    captured_at:'2026-10-13T05:00:00Z',verified_at:'2026-10-13T05:00:00Z'};
  let current={id:ID,owner_id:OWNER,judge_run_id:RUN,judge_identity:'b',
    title:'tampered',content:'tampered'};
@@ -163,7 +165,7 @@ test('restore route: only signed B can restore its own one row',async()=>{
  assert.equal(audit.length,0);
  const restored=await request('Bearer B');
  assert.equal(restored.status,200);
- assert.ok(equalHash(restored.body.sealed_backup_sha256,backup.content_sha256));
+ assert.ok(equalHash(restored.body.sealed_backup_sha256,backup.sealed_backup_sha256));
  assert.equal(restored.body.content_sha256,
    createHash('sha256').update(backup.content).digest('hex'));
  assert.equal(current.content,backup.content);

@@ -16,6 +16,9 @@ const HEADERS = {
 };
 let verify;
 function reply(res, status, data) {
+  // Fixed fields only: never log authorization, request body, IDs or note data.
+  console.info(JSON.stringify({ event: 'stage10_restore_result', status,
+    code: typeof data.error === 'string' ? data.error : 'RESTORED' }));
   for (const [k, v] of Object.entries(HEADERS)) res.setHeader(k,v);
   return res.status(status).json(data);
 }

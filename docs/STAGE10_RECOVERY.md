@@ -70,3 +70,11 @@ npm run bundle
 - 심판 B 소유자·실행 ID로 비공개 원본을 다시 조회해 변경 여부를 확인한 뒤 SQL 원자 복구를 수행하고, 복구 결과를 재조회해 ID·owner ID·실행 ID·본문 SHA-256을 확인합니다.
 - 실제 HTTP 재시험은 서명된 B 단건 GET 및 익명 단건 GET 결과만 저장합니다. 다른 사용자 A의 서명 토큰이 없으므로 A의 교차 조회 재시험은 `not_run`으로 명시합니다. `defense.note_restore_retests`에는 토큰/본문을 남기지 않습니다.
 - 운영 정책·과거 메모·과거 백업·기존 감사 내역은 수정하지 않습니다. DB 신규 테이블은 `sql/stage10-retests.sql`입니다.
+
+### SQL/API 계약 회귀 (2026-10-13)
+
+`sql/stage10-recovery.sql`과 `sql/stage10-retests.sql`을 순서대로 설치합니다. 전자는 기존 봉인 사본을 갱신하지 않고 새 봉인 해시 열을 추가합니다. RPC의 `content_sha256`과 감사의 `restored_hash`는 본문 단독 SHA-256입니다. 봉인 해시는 제목+구분자+본문입니다.
+
+DB 검증은 하나의 트랜잭션에서 `BEGIN`, 복구 SQL, `test/stage10-database.sql`, `ROLLBACK` 순서로 실행합니다. 시험 실패 시에도 반드시 ROLLBACK합니다. 이 시험은 실제 HTTP 재시험을 대체하지 않습니다.
+
+실제 복구 요청의 서버 로그 이벤트는 `stage10_restore_result`입니다. `code`로 인증/백업/복원/재시험 중 중단 지점을 확인합니다. `RECOVERY_REJECTED`이면 재시험은 아직 실행되지 않았으며, `POST_RESTORE_RETEST_INCOMPLETE`이면 HTTP 관측 또는 기록 저장이 실패했습니다.

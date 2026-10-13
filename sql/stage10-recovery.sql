@@ -11,6 +11,10 @@ CREATE TABLE IF NOT EXISTS defense.note_recovery_backups (
   captured_at timestamptz NOT NULL DEFAULT now(),
   verified_at timestamptz NOT NULL DEFAULT now()
 );
+-- Additive upgrade; preserve legacy sealed snapshots without rewriting evidence.
+ALTER TABLE defense.note_recovery_backups
+  ADD COLUMN IF NOT EXISTS sealed_backup_sha256 text
+  CHECK (sealed_backup_sha256 ~ '^[0-9a-f]{64}$');
 ALTER TABLE defense.note_recovery_backups ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE defense.note_recovery_backups FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON TABLE defense.note_recovery_backups TO service_role;
@@ -37,9 +41,10 @@ BEGIN
   IF NEW.judge_identity = 'b' AND NEW.judge_run_id IS NOT NULL AND NEW.owner_id IS NOT NULL THEN
     INSERT INTO defense.note_recovery_backups
       (note_id, owner_id, judge_run_id, judge_identity, title, content,
-       content_sha256, captured_at, verified_at)
+       content_sha256, sealed_backup_sha256, captured_at, verified_at)
     VALUES
       (NEW.id, NEW.owner_id, NEW.judge_run_id, 'b', NEW.title, NEW.content,
+       encode(sha256(convert_to(NEW.content, 'UTF8')), 'hex'),
        encode(sha256(convert_to(NEW.title || E'\n--ALEPH-STAGE10--\n' || NEW.content, 'UTF8')), 'hex'),
        now(), now())
     ON CONFLICT (note_id) DO NOTHING;
@@ -104,6 +109,7 @@ DECLARE
   snapshot defense.note_recovery_backups%ROWTYPE;
   existing record;
   digest_now text;
+  body_hash text;
   operation_now text;
 BEGIN
   IF p_note_id IS NULL OR p_owner_id IS NULL OR p_run_id IS NULL THEN
@@ -119,7 +125,10 @@ BEGIN
     RAISE EXCEPTION 'verified backup not found';
   END IF;
   digest_now := encode(sha256(convert_to(snapshot.title || E'\n--ALEPH-STAGE10--\n' || snapshot.content, 'UTF8')), 'hex');
-  IF digest_now <> snapshot.content_sha256 THEN
+  body_hash := encode(sha256(convert_to(snapshot.content, 'UTF8')), 'hex');
+  IF digest_now IS DISTINCT FROM COALESCE(snapshot.sealed_backup_sha256, snapshot.content_sha256)
+     OR (snapshot.sealed_backup_sha256 IS NOT NULL
+         AND body_hash IS DISTINCT FROM snapshot.content_sha256) THEN
     RAISE EXCEPTION 'verified backup integrity mismatch';
   END IF;
   SELECT owner_id, judge_run_id, judge_identity INTO existing
@@ -144,9 +153,9 @@ BEGIN
   INSERT INTO defense.note_restore_audit
     (note_id, owner_id, judge_run_id, restored_hash, operation)
   VALUES (snapshot.note_id, snapshot.owner_id, snapshot.judge_run_id,
-          snapshot.content_sha256, operation_now);
+          body_hash, operation_now);
   RETURN jsonb_build_object('id', snapshot.note_id, 'owner_id', snapshot.owner_id,
-    'content_sha256', snapshot.content_sha256, 'operation', operation_now);
+    'content_sha256', body_hash, 'operation', operation_now);
 END;
 $$;
 REVOKE ALL ON FUNCTION defense.stage10_restore_b_note(uuid,uuid,uuid) FROM PUBLIC, anon, authenticated;
