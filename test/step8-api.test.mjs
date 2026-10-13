@@ -47,11 +47,11 @@ function makeHandler(relativePath,db){
     .replace('export default async function handler','async function handler');
   const factory=new Function('createClient','createLoginVerifier','config','resourceId','idFromPath','traceStage8Access',
     'scopedNoteQuery','noteOwnerColumns','getNoteScope','noteOwnerMatches','crypto','process','requireApprovedDevice',
-    source+'\nreturn handler;');
+    'recordStage11','traceActor',source+'\nreturn handler;');
   return factory(()=>db,()=>async auth=>identities[auth]??null,{},
     (type,id)=>type+':'+id,idFromPath,()=>{},scopedNoteQuery,noteOwnerColumns,getNoteScope,noteOwnerMatches,
     {randomUUID},{env:{SUPABASE_URL:'https://example.invalid',SUPABASE_SECRET_KEY:'test-only-placeholder'}},
-    async()=>({ok:true}));
+    async()=>({ok:true}),async()=>true,identity=>identity?.kind==='judge'?'judge_'+identity.identity:'student');
 }
 function request(handler,token,method,path,body){
   return new Promise((resolve,reject)=>{
