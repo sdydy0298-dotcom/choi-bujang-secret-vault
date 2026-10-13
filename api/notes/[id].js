@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import config from '../../aleph.config.json' with { type: 'json' };
 import { resourceId } from '../../src/resource-zones.mjs';
 import { createLoginVerifier } from '../../src/verify-login.mjs';
+import { getNoteScope, scopedNoteQuery, noteOwnerMatches } from '../../src/note-scope.mjs';
 
 const JSON_HEADERS = {
   'Cache-Control': 'no-store, max-age=0',
@@ -68,20 +69,22 @@ export default async function handler(request, response) {
     return sendJson(response, 503, { error: 'LOGIN_VERIFIER_NOT_CONFIGURED' });
   }
   if (!identity) return unauthorized(response);
+  if (!getNoteScope(identity)) return sendJson(response, 403, { error: 'NOTE_SCOPE_NOT_ALLOWED' });
 
   const supabase = serverClient(supabaseUrl, supabaseSecretKey);
 
   if (request.method === 'GET') {
-    const { data, error } = await supabase
+    const { data, error } = await scopedNoteQuery(supabase
       .schema('defense')
       .from('notes')
-      .select('id, title, content')
-      .eq('id', id)
-      .eq('owner_id', identity.userId)
+      .select('id, title, content, owner_id, judge_run_id, judge_identity')
+      .eq('id', id), identity)
       .maybeSingle();
 
     if (error) return sendJson(response, 502, { error: 'DATA_SOURCE_UNAVAILABLE' });
-    if (!data) return sendJson(response, 404, { error: 'NOTE_NOT_FOUND' });
+    if (!data || !noteOwnerMatches(data, identity)) {
+      return sendJson(response, 404, { error: 'NOTE_NOT_FOUND' });
+    }
 
     return sendJson(response, 200, { id: data.id, resourceId: resourceId('note', data.id), title: data.title, body: data.content });
   }
@@ -89,17 +92,18 @@ export default async function handler(request, response) {
   if (request.method === 'PUT') {
     const body = requestBody(request);
     if (!body || Object.prototype.hasOwnProperty.call(body, 'owner_id')
+        || Object.prototype.hasOwnProperty.call(body, 'judge_run_id')
+        || Object.prototype.hasOwnProperty.call(body, 'judge_identity')
         || typeof body.title !== 'string' || typeof body.body !== 'string'
         || !body.title.trim() || body.title.length > 200 || body.body.length > 5000) {
       return sendJson(response, 400, { error: 'INVALID_NOTE' });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await scopedNoteQuery(supabase
       .schema('defense')
       .from('notes')
       .update({ title: body.title.trim(), content: body.body })
-      .eq('id', id)
-      .eq('owner_id', identity.userId)
+      .eq('id', id), identity)
       .select('id')
       .maybeSingle();
 
@@ -109,12 +113,11 @@ export default async function handler(request, response) {
     return sendJson(response, 200, { id, resourceId: resourceId('note', id) });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await scopedNoteQuery(supabase
     .schema('defense')
     .from('notes')
     .delete()
-    .eq('id', id)
-    .eq('owner_id', identity.userId)
+    .eq('id', id), identity)
     .select('id')
     .maybeSingle();
 

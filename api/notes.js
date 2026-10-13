@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import config from '../aleph.config.json' with { type: 'json' };
 import { resourceId } from '../src/resource-zones.mjs';
 import { createLoginVerifier } from '../src/verify-login.mjs';
+import { getNoteScope, scopedNoteQuery, noteOwnerColumns } from '../src/note-scope.mjs';
 
 const JSON_HEADERS = {
   'Cache-Control': 'no-store, max-age=0',
@@ -63,15 +64,15 @@ export default async function handler(request, response) {
     return sendJson(response, 503, { error: 'LOGIN_VERIFIER_NOT_CONFIGURED' });
   }
   if (!identity) return unauthorized(response);
+  if (!getNoteScope(identity)) return sendJson(response, 403, { error: 'NOTE_SCOPE_NOT_ALLOWED' });
 
   const supabase = serverClient(supabaseUrl, supabaseSecretKey);
 
   if (request.method === 'GET') {
-    const { data, error } = await supabase
+    const { data, error } = await scopedNoteQuery(supabase
       .schema('defense')
       .from('notes')
-      .select('id, title, content, created_at')
-      .eq('owner_id', identity.userId)
+      .select('id, title, content, created_at'), identity)
       .order('created_at', { ascending: true });
 
     if (error) return sendJson(response, 502, { error: 'DATA_SOURCE_UNAVAILABLE' });
@@ -88,6 +89,8 @@ export default async function handler(request, response) {
 
   const body = requestBody(request);
   if (!body || Object.prototype.hasOwnProperty.call(body, 'owner_id')
+      || Object.prototype.hasOwnProperty.call(body, 'judge_run_id')
+      || Object.prototype.hasOwnProperty.call(body, 'judge_identity')
       || typeof body.title !== 'string' || typeof body.body !== 'string'
       || !body.title.trim() || body.title.length > 200 || body.body.length > 5000
       || (body.id != null && (typeof body.id !== 'string' || !UUID.test(body.id)))) {
@@ -100,7 +103,7 @@ export default async function handler(request, response) {
     .from('notes')
     .insert({
       id,
-      owner_id: identity.userId,
+      ...noteOwnerColumns(identity),
       title: body.title.trim(),
       content: body.body,
     });

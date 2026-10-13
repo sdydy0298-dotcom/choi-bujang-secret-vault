@@ -177,37 +177,17 @@ Supabase `defense.notes`는 RLS가 켜져 있습니다. `anon`에는 테이블 C
 
 실제 화면 확인: 기존 `https://secret-vault-sdydy0298.vercel.app` 주소와 테스트 계정이 유지되어야 합니다. 원래 로그인과 메모 CRUD는 이전 단계와 동일합니다.
 
-## 8단계 저장점 · 자료별 자원 구역 분리
+## 8단계 저장점 · 자료 구역 분리 (최종 정리)
 
-- 기존 1~7단계 메모·로그인·소유권 검사·UI는 보존했습니다. `defense.notes`와 강사 공지 `defense.notices`는 별도의 테이블이며, 공개 정적 메모에는 실제 자료가 없습니다.
-- 자원 ID: `note:<uuid>`, `notice:<uuid>`. 동작은 API 메서드와 정확한 경로로 결정하고 `?action=` 같은 쿼리로 고르지 않습니다. `export` 같은 기능 경로는 메모/:id 형식의 UUID와 구분해 거부합니다.
-- 판정기: `resource_zone`/ `route_not_allowed`/ `write_not_allowed`를 추가합니다. 미등록 기기는 6단계대로 거부하고 복합 위험은 7단계대로 재확인합니다. `aleph.decision.v1`에 사용자별 소유권 또는 강사 역할 필드가 없어서 이를 가짜 입력으로 만들지 않습니다.
-- API: 기존 `/api/notes`, `/api/notes/:id`는 서버가 검증한 `userId`로 `owner_id`를 필터링합니다. `/api/notices`와 `/api/notices/:id`는 별도 자원이며, 쓰기는 Supabase Auth Admin에서 조회한 `app_metadata.aleph_role === 'instructor'`인 인증 학생에게만 허용합니다. 기존 사용자 메타데이터/HTTP 헤더/요청 본문의 `role`은 권한이 아닙니다.
-- DB: `defense.notices`는 RLS ON, `anon`/`authenticated` 테이블 권한 없음, 서버 `service_role`만 읽기·생성·수정합니다. 강사 권한이 지정된 계정은 현재 없어, 역할을 임의로 부여하지 않았습니다.
-- 검증: `npm run test:r5`, `npm run test:6`, `npm run test:7`, `npm run test:8`, `npm run decider:test`, `npm run fixture:7`, `npm run build -- --local` 순으로 확인합니다. 빌드 후 `git status --short`에서 `public/data.json`만 수정됐으면 `git restore -- public/data.json` 한 뒤 `npm run prepare:8 && npm run bundle`을 수행합니다.
-- 미실행: 실제 A/B 교차 계정의 메모 API 직접 호출과 강사 권한 계정으로 공지 쓰기/수정은 인증정보를 공유하지 않으므로 심판 및 실제 테스트에서 별도 확인해야 합니다.
+1~7단계의 로그인·자료·기기 등록·복합 이상 접속은 유지합니다. 반복된 8단계 임시 설계 설명은 정리했으며 과거 기록은 Git 이력에 보존했습니다.
 
-### 8단계 심판 재시험 보정 - S08_OTHER_ZONE_ALLOWED
+- 자원은 `note:<uuid>`(개인 메모), `notice:<uuid>`(강사 공지)로 별도 ID·테이블을 유지합니다. 기존 메모 API 주소, 메뉴, 학생 메모 데이터는 삭제하지 않습니다.
+- 판정기는 엔진이 확인한 주체·기기·메서드·정확한 경로만 판단합니다. 미등록 기기/복합 이상 접속 규칙을 그대로 유지하고, 소유 확인되지 않은 경로와 쿼리 기능은 거부합니다. 공개 계약에는 실사용자 DB 소유권 정보가 없으므로 실사용자 자원에 임의 권한을 부여하지 않습니다.
+- 최종 메모 API에서는 JWT로 확인한 사용자 ID와 DB `owner_id`를 매 요청 비교합니다. **심판용 JWT의 A/B 신원(`aleph_identity`) 및 실행 ID(`aleph_run`)도 검증된 서버 신원에 포함시켜** `defense.notes.judge_identity`, `judge_run_id`와 함께 검사합니다. A/B JWT가 같은 `sub`를 사용해도 서로의 메모를 조회할 수 없습니다.
+- `src/note-scope.mjs`가 목록·단건 조회·생성·수정·삭제에 동일한 범위를 적용합니다. GET 단건은 저장된 `owner_id`/심판 구역을 한 번 더 비교합니다. 요청 본문의 `owner_id`, `judge_identity`, `judge_run_id`는 거부합니다. 일반 학생의 기존 메모는 두 심판 구역 컬럼이 NULL이므로 그대로 유지됩니다.
+- 강사 공지 변경은 별도 API에서 Supabase Auth Admin의 `app_metadata.aleph_role === 'instructor'`를 요구합니다. 학생이 본문에 `role`을 넣어도 권한을 얻지 못합니다.
+- DB 변경 재현: `sql/stage8-note-scope.sql`. Supabase에 이미 적용했으며 기존 메모 6건과 두 소유자를 유지했습니다. 서버 함수는 기존 6개 그대로이며 신규 API 주소는 없습니다.
 
-이전 커밋의 판정기는 소유자/강사 역할을 검증할 수 없는 v1 요청에서도 `GET /api/notes` 전체 목록과 메모 쓰기를 `allow`로 판정했습니다. 통과 목표 표본의 `s08-all-notes` 및 `s08-write-notice` 검사와 대조하여 해당 경로를 fail-closed로 변경했습니다.
+**검증:** `npm run test:r5 && npm run test:6 && npm run test:7 && npm run test:8` 및 `npm run decider:test && npm run fixture:7`. 새 `test/step8-api.test.mjs`는 **실제 API 핸들러 코드를 격리된 모의 인증·DB로 실행해** 동일 JWT sub의 A/B 메모 조회·변경 구역, 목록 및 기존 학생 레코드 유지, 본문 위조 거부를 검사합니다. Production 배포 READY 뒤 `npm run prepare:8 && npm run bundle`을 실행합니다.
 
-- 판정기에서 허용하는 읽기는 `GET /notes`, `GET /notes/:id`, `GET /api/my/notes`, `GET /api/notes/:id`, `GET /api/notices`로 제한합니다. `GET /api/notes` 및 모르는 경로는 `route_not_allowed`로 거부합니다.
-- 엔진 요청 v1에는 행 소유자/강사 역할 필드가 없으므로 `POST`/`PUT`/`DELETE` 쓰기는 판정기에서 `write_not_allowed`로 거부합니다. 브라우저가 기존 `/api/notes`에서 자기 메모를 수정하는 기능과 서버 `owner_id` 검사는 그대로 유지됩니다. 운영 엔진을 실제로 연결할 때는 양쪽 정책을 별도로 일치시켜야 합니다.
-- `GET /api/my/notes`는 기존 메모 API의 소유자 필터를 재사용하는 읽기 전용 별칭입니다. 기존 화면/URL은 변경하지 않습니다. HTTP/가상 판정 추가 점검은 `npm run bundle`에 기록합니다.
-- `npm run test:r5`, `npm run test:6`, `npm run test:7`, `npm run test:8`, `npm run decider:test`, `npm run fixture:7`를 실행하고 최신 Production 배포 후 `npm run prepare:8 && npm run bundle`로 확인합니다. 실제 A/B 교차 계정 시험은 수행하지 않았다고 기록합니다.
-
-### 8단계 재보정 - 타인 소유 자원에 대한 무조건 허용 제거
-
-기존 판정기는 subjectId가 존재하는지만 확인했으며 누구 소유인지 비교하지 않았습니다. 8단계 보정은 엔진 검증 classId/projectId/subjectId/deviceId/service와 method, 정확한 path를 서버의 자원 소유 허용표와 함께 비교합니다. 다른 등록 기기와 사용자로 같은 메모를 요청하면 거부하고, 본인 자기 메모는 읽기/수정이 허용됩니다. 없는 바인딩은 fail-closed 처리합니다.
-
-class_fixture/project_fixture 예시는 이전 단계에서 제공된 **가상 테스트 전용** 자원입니다. 실제 사용자·메모 연결표는 공식 엔진 또는 운영자가 확인한 값만 서버의 ALEPH_RESOURCE_BINDINGS에 등록해야 하며 Git·브라우저 요청·user_metadata를 출처로 삼지 않습니다. 실제 운영 자원 바인딩과 A/B 시험 토큰이 없으므로 운영 계정 교차 조회 실측은 미실행입니다. 기존 Supabase notes.owner_id 검사와 강사 role 검증 API는 보존합니다. S08_OTHER_ZONE_ALLOWED로 심판이 사용한 비공개 요청은 별도로 확인이 필요하며 가상 테스트 PASS를 심판 판정으로 대체하지 않습니다.
-
-### 8단계 4차 점검 - 공식 계약과 운영 허용표 정리
-
-이전 정책에 직접 작성한 student_A/student_B/student_subject 및 가상 UUID는 실제 엔진이 증명한 소유 관계가 아니었습니다. 운영 판정 기본 허용표에서 모두 제거하고 공식 scripts/fixture-7.mjs의 learner_fixture /notes/demo 한 건만 연습 자원으로 남겼습니다. 엔진 v1에는 Supabase 소유자·강사 역할이 없으므로 다른 운영 사용자는 서버 전용 ALEPH_RESOURCE_BINDINGS에 확인된 classId/projectId/subjectId/deviceId/path/resourceId/ownerSubjectId/methods를 명시적으로 등록해야 허용됩니다. 미등록 자원은 거부합니다.
-
-실제 자료 조회 API는 검증된 Supabase 사용자 ID와 defense.notes.owner_id를 비교하며 강사 공지 수정은 검증된 관리자 메타데이터를 요구합니다. 데이터베이스나 기존 URL은 변경하지 않았습니다. 기존 자료실 목록의 내부 GET 요청은 개인 전용 /api/my/notes로 조정했고 aleph.config.json의 읽기 허용 경로도 동일하게 변경했습니다. 기존 /api/notes API는 소유자 필터를 유지한 채 남겼습니다.
-
-이 수정은 가상 사용자에 실제 권한을 준 명백한 결함을 제거한 것이며, 비공개 S08 심판 판정을 재현했다는 뜻은 아닙니다. 로컬 테스트 통과와 배포 READY만으로 심판 통과를 보장하지 않습니다. 실제 Vercel 요청 로그는 연결 권한 403으로 확인하지 못했습니다.
-
-8단계 운영 자기점검에는 비로그인 GET /api/my/notes 요청을 직접 전송해 401 또는 403과 JSON 오류가 확인됐는지를 추가했습니다. 점검 20개 중 실제 계정 교차 요청은 여전히 미실행이며, 20개 전체가 차단 성공을 뜻하지 않습니다.
+**판정의 한계:** S08_OTHER_ZONE_ALLOWED의 비공개 심판 요청·토큰은 확인되지 않았습니다. 동일 `sub` 사용은 재현 가능한 보안 결함의 조건이며 실제 심판이 그 조건을 사용했다는 증거는 없습니다. 로컬 테스트 PASS는 심판 통과의 증거가 아니므로 실제 A/B 로그인 교차 GET과 판정 결과는 추가 확인 대상입니다.
