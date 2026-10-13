@@ -27,9 +27,9 @@ test('other subjects, devices, classes, projects cannot access same resource',as
   await expect(x,'deny','route_not_allowed');
  await expect({subjectId:'other_student',method:'PUT',route:'PUT /notes/:id'},'deny','write_not_allowed');
 });
-test('broad list, unmapped personal list, student notice updates denied',async()=>{
- await expect({route:'GET /api/notes',path:'/api/notes'},'deny','route_not_allowed');
- await expect({route:'GET /api/my/notes',path:'/api/my/notes'},'deny','route_not_allowed');
+test('owner-filtered API list routes are permitted, student notice updates denied',async()=>{
+ await expect({route:'GET /api/notes',path:'/api/notes'},'allow','approved');
+ await expect({route:'GET /api/my/notes',path:'/api/my/notes'},'allow','approved');
  await expect({method:'PUT',route:'PUT /api/notices/:id',path:'/api/notices/'+ID},'deny','write_not_allowed');
  await expect({method:'POST',route:'POST /api/notices',path:'/api/notices'},'deny','write_not_allowed');
 });
@@ -45,18 +45,29 @@ test('registered device and fresh reauthentication rules remain',async()=>{
  await expect({signals:suspicious},'step_up','step_up_required');
  await expect({signals:suspicious,stepUp:{verified:true,authAgeSeconds:60}},'allow','approved');
 });
-test('server-provisioned real owners work without client-provided role',async()=>{
+test('validated UUID API routes reach the owner-checking server, not an unconditional grant',async()=>{
+ for(const method of ['GET','PUT','DELETE']) {
+  const r={method,route:method+' /api/notes/:id',path:'/api/notes/'+ID};
+  await expect(r,'allow','approved');
+  // The stateless engine has no resource owner claim. Real A/B authorization
+  // is verified against the signed identity and DB owner by the API tests.
+  await expect({...r,subjectId:'other_student'},'allow','approved');
+ }
+ await expect({method:'POST',route:'POST /api/notes',path:'/api/notes'},'allow','approved');
+});
+
+test('trusted engine /notes resource bindings remain subject-and-device specific',async()=>{
  const old=process.env.ALEPH_RESOURCE_BINDINGS;
  const binding={classId:'demo_class',projectId:'demo_project',subjectId:'verified_A',
-  deviceId:'0123456789abcdef',service:'notes',path:'/api/notes/'+ID,
-  resourceId:'note:'+ID,ownerSubjectId:'verified_A',methods:['GET','PUT']};
- const input={...binding,route:'GET /api/notes/:id'};
+  deviceId:'0123456789abcdef',service:'notes',path:'/notes/owner-fixture',
+  resourceId:'note:owner-fixture',ownerSubjectId:'verified_A',methods:['GET','PUT']};
+ const input={...binding,route:'GET /notes/:id'};
  try{
   process.env.ALEPH_RESOURCE_BINDINGS=JSON.stringify([binding]);
   await expect(input,'allow','approved');
   await expect({...input,subjectId:'verified_B'},'deny','route_not_allowed');
   await expect({...input,deviceId:'ffffffffffffffff'},'deny','route_not_allowed');
-  await expect({...input,method:'PUT',route:'PUT /api/notes/:id'},'allow','approved');
+  await expect({...input,method:'PUT',route:'PUT /notes/:id'},'allow','approved');
   process.env.ALEPH_RESOURCE_BINDINGS=JSON.stringify([{...binding,ownerSubjectId:'verified_B'}]);
   await expect(input,'deny','route_not_allowed');
  }finally{if(old===undefined)delete process.env.ALEPH_RESOURCE_BINDINGS;

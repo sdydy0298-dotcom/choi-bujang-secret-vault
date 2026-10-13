@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import config from '../aleph.config.json' with { type: 'json' };
 import { resourceId } from '../src/resource-zones.mjs';
+import { traceStage8Access } from '../src/stage8-access-trace.mjs';
 import { createLoginVerifier } from '../src/verify-login.mjs';
 import { getNoteScope, scopedNoteQuery, noteOwnerColumns } from '../src/note-scope.mjs';
 
@@ -66,6 +67,15 @@ export default async function handler(request, response) {
   if (!identity) return unauthorized(response);
   if (!getNoteScope(identity)) return sendJson(response, 403, { error: 'NOTE_SCOPE_NOT_ALLOWED' });
 
+  let url;
+  try { url = new URL(request.url, 'https://resource.invalid'); }
+  catch { return sendJson(response, 404, { error: 'RESOURCE_NOT_FOUND' }); }
+  const validPath = (url.pathname === '/api/notes')
+    || (request.method === 'GET' && url.pathname === '/api/my/notes');
+  if (!validPath || url.search || url.hash) {
+    return sendJson(response, 404, { error: 'RESOURCE_NOT_FOUND' });
+  }
+
   const supabase = serverClient(supabaseUrl, supabaseSecretKey);
 
   if (request.method === 'GET') {
@@ -75,8 +85,12 @@ export default async function handler(request, response) {
       .select('id, title, content, created_at'), identity)
       .order('created_at', { ascending: true });
 
-    if (error) return sendJson(response, 502, { error: 'DATA_SOURCE_UNAVAILABLE' });
+    if (error) {
+      traceStage8Access(identity, 'note_list_get', 502);
+      return sendJson(response, 502, { error: 'DATA_SOURCE_UNAVAILABLE' });
+    }
 
+    traceStage8Access(identity, 'note_list_get', 200);
     return sendJson(response, 200, {
       notes: (data ?? []).map(note => ({
         id: note.id,
@@ -113,5 +127,6 @@ export default async function handler(request, response) {
     return sendJson(response, 502, { error: 'DATA_SOURCE_UNAVAILABLE' });
   }
 
+  traceStage8Access(identity, 'note_create', 201);
   return sendJson(response, 201, { id, resourceId: resourceId('note', id) });
 }

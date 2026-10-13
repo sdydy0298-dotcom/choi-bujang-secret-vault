@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import config from '../../aleph.config.json' with { type: 'json' };
-import { resourceId } from '../../src/resource-zones.mjs';
+import { resourceId, idFromPath } from '../../src/resource-zones.mjs';
+import { traceStage8Access } from '../../src/stage8-access-trace.mjs';
 import { createLoginVerifier } from '../../src/verify-login.mjs';
 import { getNoteScope, scopedNoteQuery, noteOwnerMatches } from '../../src/note-scope.mjs';
 
@@ -51,8 +52,9 @@ export default async function handler(request, response) {
     return sendJson(response, 405, { error: 'METHOD_NOT_ALLOWED' });
   }
 
-  const id = Array.isArray(request.query.id) ? request.query.id[0] : request.query.id;
-  if (typeof id !== 'string' || !UUID.test(id)) {
+  // Reject query-selected resources, unknown paths and extra trailing segments.
+  const id = idFromPath(request, 'notes');
+  if (!id) {
     return sendJson(response, 400, { error: 'INVALID_NOTE_ID' });
   }
 
@@ -81,11 +83,16 @@ export default async function handler(request, response) {
       .eq('id', id), identity)
       .maybeSingle();
 
-    if (error) return sendJson(response, 502, { error: 'DATA_SOURCE_UNAVAILABLE' });
+    if (error) {
+      traceStage8Access(identity, 'note_item_get', 502);
+      return sendJson(response, 502, { error: 'DATA_SOURCE_UNAVAILABLE' });
+    }
     if (!data || !noteOwnerMatches(data, identity)) {
+      traceStage8Access(identity, 'note_item_get', 404);
       return sendJson(response, 404, { error: 'NOTE_NOT_FOUND' });
     }
 
+    traceStage8Access(identity, 'note_item_get', 200);
     return sendJson(response, 200, { id: data.id, resourceId: resourceId('note', data.id), title: data.title, body: data.content });
   }
 

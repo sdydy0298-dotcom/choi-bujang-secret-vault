@@ -11,6 +11,7 @@
   },
   "allowedRoutes": [
     "GET /api/my/notes",
+    "GET /api/notes",
     "POST /api/notes",
     "GET /api/notes/:id",
     "PUT /api/notes/:id",

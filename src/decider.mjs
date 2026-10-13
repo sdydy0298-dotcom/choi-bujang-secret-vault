@@ -4,6 +4,7 @@ export const RULE_IDS=Object.freeze(['device_registered','step_up_required','res
 const reply=(r,decision,reasonCode,ruleId)=>({schema:'aleph.decision.v1',requestId:r?.requestId,decision,reasonCode,ruleIds:[ruleId]});
 const UUID='[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const READ=Object.freeze({
+ 'GET /api/notes':/^\/api\/notes$/u,
  'GET /notes':/^\/notes$/u,
  'GET /notes/:id':/^\/notes\/[A-Za-z0-9._~-]{1,128}$/u,
  'GET /api/my/notes':/^\/api\/my\/notes$/u,
@@ -19,6 +20,18 @@ const WRITE=Object.freeze({
  'POST /api/notices':/^\/api\/notices$/u,
  'PUT /api/notices/:id':new RegExp('^/api/notices/'+UUID+'$','iu')
 });
+// Exact API resource routes are admitted to the owner-filtered *server* API.
+// A route match is not an ownership grant: the API must verify the signed user
+// and DB owner on every single-item GET/PUT/DELETE, including judge A/B.
+const OWNER_ENFORCED_ROUTES = new Set([
+  'GET /api/notes', 'POST /api/notes', 'GET /api/my/notes',
+  'GET /api/notes/:id', 'PUT /api/notes/:id', 'DELETE /api/notes/:id'
+]);
+const PUBLIC_NOTICE_READ_ROUTES = new Set(['GET /api/notices', 'GET /api/notices/:id']);
+function apiOwnedRoute(r, key) {
+  return (r.service === 'notes' && OWNER_ENFORCED_ROUTES.has(key))
+    || (['notes', 'notices'].includes(r.service) && PUBLIC_NOTICE_READ_ROUTES.has(key));
+}
 // The sole default resource is the official fixture-7 training request.
 // Earlier invented student_A/student_B UUID grants were not legitimate owners.
 const STARTER=Object.freeze({classId:'class_fixture',projectId:'project_fixture',
@@ -70,7 +83,7 @@ export async function decide(r){
   ||!(read??write).test(r.path)||r.queryLength!==0
   ||/[%?#\\]/u.test(r.path))
   return reply(r,'deny','route_not_allowed','route_not_allowed');
- if(!boundResource(r)){
+ if(!apiOwnedRoute(r,key)&&!boundResource(r)){
   if(write)return reply(r,'deny','write_not_allowed','write_not_allowed');
   return reply(r,'deny','route_not_allowed','resource_zone');
  }
