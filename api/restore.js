@@ -141,7 +141,7 @@ export default async function handler(req,res) {
       noteBackup:{reReadVerified:true, version:preflight.version,
         capturedAt:backup.captured_at, verifiedAt:backup.verified_at,
         sealedSha256:backup.sealed_backup_sha256 ?? backup.content_sha256,
-        contentSha256:bodySha256(backup.content)}}
+        contentSha256:bodySha256(backup.content)}
     },
     postRestoreRetests:{
       checks:report.checks,
