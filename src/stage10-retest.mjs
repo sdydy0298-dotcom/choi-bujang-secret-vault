@@ -55,8 +55,25 @@ export async function runPostRestoreChecks({
     checks.push(outcome('stage10_anonymous_get_after_restore',401,null,false,
       { error:'request_unavailable' }));
   }
+  // Real regression probes. A judge-A JWT is not available; never invent one.
+  for (const item of [
+    {testId:'stage10_owner_list_after_restore', route:'/api/my/notes', bearer:true, expected:200},
+    {testId:'stage10_anonymous_list_after_restore', route:'/api/my/notes', bearer:false, expected:401},
+    {testId:'stage10_anonymous_global_read_blocked', route:'/api/notes', bearer:false, expected:401}
+  ]) {
+    try {
+      const response=await fetcher(new URL(item.route,base),{
+        method:'GET',redirect:'error',cache:'no-store',
+        headers:item.bearer?{Authorization:'Bearer '+token}:{},
+        signal:AbortSignal.timeout(6000)
+      });
+      checks.push(outcome(item.testId,item.expected,response.status,response.status===item.expected));
+    } catch {
+      checks.push(outcome(item.testId,item.expected,null,false,{error:'request_unavailable'}));
+    }
+  }
   checks.push({testId:'stage10_other_owner_signed_get_after_restore',
-    outcome:'not_run',reason:'Independent A signed JWT is not provided to this B-only restore endpoint'});
+    outcome:'not_run',reason:'Independent A signed JWT is not available; no fabricated result'});
   return {
     checkedAt:new Date().toISOString(),
     checks,
