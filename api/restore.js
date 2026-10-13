@@ -73,7 +73,7 @@ export default async function handler(req,res) {
     auth:{autoRefreshToken:false,persistSession:false,detectSessionInUrl:false},
   });
   const lookupBackup=()=>db.schema('defense').from('note_recovery_backups')
-    .select('note_id,owner_id,judge_run_id,judge_identity,title,content,content_sha256,captured_at,verified_at')
+    .select('note_id,owner_id,judge_run_id,judge_identity,title,content,content_sha256,sealed_backup_sha256,captured_at,verified_at')
     .eq('note_id',id).eq('owner_id',scope.owner_id)
     .eq('judge_run_id',scope.judge_run_id).eq('judge_identity','b').maybeSingle();
   const {data:backup,error:readError}=await lookupBackup();
@@ -85,6 +85,7 @@ export default async function handler(req,res) {
   const {data:reloaded,error:backupRereadError}=await lookupBackup();
   if (backupRereadError || !reloaded || !verifiedBackup(reloaded,signedB,id) ||
       !equalHash(reloaded.content_sha256,backup.content_sha256) ||
+      (backup.sealed_backup_sha256 && !equalHash(reloaded.sealed_backup_sha256,backup.sealed_backup_sha256)) ||
       reloaded.title!==backup.title || reloaded.content!==backup.content)
     return reply(res,409,{error:'BACKUP_RECHECK_FAILED'});
 
@@ -96,7 +97,7 @@ export default async function handler(req,res) {
     });
   if (restoreError || !outcome || outcome.id !== id ||
       outcome.owner_id !== scope.owner_id ||
-      !equalHash(outcome.content_sha256,backup.content_sha256))
+      !equalHash(outcome.content_sha256,bodySha256(backup.content)))
     return reply(res,409,{error:'RECOVERY_REJECTED'});
 
   const {data:current,error:verifyError}=await db.schema('defense').from('notes')
@@ -109,7 +110,7 @@ export default async function handler(req,res) {
       current.owner_id!==scope.owner_id ||
       current.judge_run_id!==scope.judge_run_id ||
       current.judge_identity!=='b' ||
-      !equalHash(noteContentHash(current.title,current.content),backup.content_sha256) ||
+      !equalHash(noteContentHash(current.title,current.content),backup.sealed_backup_sha256 ?? backup.content_sha256) ||
       !equalHash(bodySha256(current.content),restoredBodyHash))
     return reply(res,502,{error:'POST_RESTORE_VERIFICATION_FAILED'});
 
@@ -125,7 +126,7 @@ export default async function handler(req,res) {
 
   return reply(res,200,{restored:true,id,owner_id:scope.owner_id,
     content_sha256:restoredBodyHash,
-    sealed_backup_sha256:backup.content_sha256,
+    sealed_backup_sha256:backup.sealed_backup_sha256 ?? backup.content_sha256,
     operation:outcome.operation,
     backupVerification:{
       verified:true, policyVersion:preflight.version,
