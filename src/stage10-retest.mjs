@@ -31,7 +31,9 @@ export async function runPostRestoreChecks({
     {testId:'stage10_anonymous_get_after_restore',url:path,bearer:false,expected:401},
     {testId:'stage10_owner_list_after_restore',url:new URL('/api/my/notes',base),bearer:true,expected:200},
     {testId:'stage10_anonymous_list_after_restore',url:new URL('/api/my/notes',base),bearer:false,expected:401},
-    {testId:'stage10_anonymous_global_read_blocked',url:new URL('/api/notes',base),bearer:false,expected:401}
+    {testId:'stage10_anonymous_global_read_blocked',url:new URL('/api/notes',base),bearer:false,expected:401},
+    {testId:'stage10_owner_notices_after_restore',url:new URL('/api/notices',base),bearer:true,expected:200},
+    {testId:'stage10_anonymous_notices_after_restore',url:new URL('/api/notices',base),bearer:false,expected:401}
   ];
   const checks=await Promise.all(probes.map(async item=>{
     try {
