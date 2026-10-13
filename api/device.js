@@ -4,6 +4,7 @@ import config from '../aleph.config.json' with { type: 'json' };
 import { createLoginVerifier } from '../src/verify-login.mjs';
 import { getNoteScope } from '../src/note-scope.mjs';
 import { validPublicKey } from '../src/device-approval.mjs';
+import { recordStage11, traceActor } from '../src/stage11-diagnostics.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 let verifyLogin;
@@ -14,6 +15,7 @@ const respond = (res,status,body) => {
 };
 
 export default async function handler(req,res) {
+  await recordStage11('device_enter',{route:'device'});
   if (!['GET','POST'].includes(req.method)) {
     res.setHeader('Allow','GET, POST');
     return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
@@ -25,7 +27,12 @@ export default async function handler(req,res) {
     verifyLogin ??= createLoginVerifier({config,supabaseSecretKey:process.env.SUPABASE_SECRET_KEY});
     identity = await verifyLogin(req.headers?.authorization);
   } catch { return respond(res,503,{error:'LOGIN_VERIFIER_UNAVAILABLE'}); }
-  if (!identity) return respond(res,401,{error:'UNAUTHORIZED'});
+  if (!identity) {
+    await recordStage11('device_auth_rejected',{route:'device',actor:'anonymous',statusCode:401});
+    return respond(res,401,{error:'UNAUTHORIZED'});
+  }
+  const actor=traceActor(identity);
+  await recordStage11('device_identity_verified',{route:'device',actor});
   // Both independently verified identity kinds may request a PENDING device.
   // Judge A/B each get a distinct, run-bound owner scope. No authenticated
   // caller (including a judge) may approve their own request through this API.
@@ -48,6 +55,7 @@ export default async function handler(req,res) {
       .eq('owner_id',scope.owner_id).maybeSingle();
     if (error) return respond(res,503,{error:'DEVICE_SERVICE_UNAVAILABLE'});
     if (!data) return respond(res,404,{error:'DEVICE_NOT_FOUND'});
+    await recordStage11('device_status_served',{route:'device',actor,statusCode:200});
     return respond(res,200,{deviceId:data.id,status:data.status,
       requestedAt:data.requested_at,approvedAt:data.approved_at});
   }
@@ -57,19 +65,28 @@ export default async function handler(req,res) {
   if (!body || typeof body!=='object' || Array.isArray(body) ||
       Object.keys(body).some(key=>!['label','publicKey'].includes(key)) ||
       typeof body.label!=='string' || !body.label.trim() ||
-      body.label.length>60 || !validPublicKey(body.publicKey))
+      body.label.length>60 || !validPublicKey(body.publicKey)) {
+    await recordStage11('device_error',{route:'device',actor,statusCode:400});
     return respond(res,400,{error:'INVALID_DEVICE_REQUEST'});
+  }
   const {count,error:countError}=await db.schema('defense').from('device_approvals')
     .select('id',{count:'exact',head:true}).eq('owner_id',scope.owner_id)
     .in('status',['pending','approved']);
-  if (countError) return respond(res,503,{error:'DEVICE_SERVICE_UNAVAILABLE'});
+  if (countError) {
+    await recordStage11('device_error',{route:'device',actor,statusCode:503});
+    return respond(res,503,{error:'DEVICE_SERVICE_UNAVAILABLE'});
+  }
   if ((count??0)>=5) return respond(res,409,{error:'DEVICE_LIMIT_REACHED'});
   const id=randomUUID();
   const {error}=await db.schema('defense').from('device_approvals').insert({
     id,owner_id:scope.owner_id,label:body.label.trim(),
     public_jwk:{kty:'EC',crv:'P-256',x:body.publicKey.x,y:body.publicKey.y},status:'pending'
   });
-  if (error) return respond(res,503,{error:'DEVICE_SERVICE_UNAVAILABLE'});
+  if (error) {
+    await recordStage11('device_error',{route:'device',actor,statusCode:503});
+    return respond(res,503,{error:'DEVICE_SERVICE_UNAVAILABLE'});
+  }
+  await recordStage11('device_pending_created',{route:'device',actor,statusCode:201});
   return respond(res,201,{deviceId:id,status:'pending',
     message:'운영자 확인 대기 중입니다. 요청만으로 자료 접근이 허용되지 않습니다.'});
 }
