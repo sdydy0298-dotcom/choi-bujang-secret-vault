@@ -16,6 +16,7 @@ const reply = (r, decision, reasonCode, ruleId) => ({
 const READ_ROUTES = Object.freeze({
   'GET /notes': /^\/notes$/u,
   'GET /notes/:id': /^\/notes\/[^/?#]+$/u,
+  'PUT /notes/:id': /^\/notes\/[^/?#]+$/u,
   'GET /api/my/notes': /^\/api\/my\/notes$/u,
   'GET /api/notes/:id': /^\/api\/notes\/[0-9a-f-]{36}$/iu,
   'GET /api/notices': /^\/api\/notices$/u,
@@ -31,6 +32,40 @@ const WRITE_DENY_ROUTES = Object.freeze({
   'POST /api/notices': /^\/api\/notices$/u,
   'PUT /api/notices/:id': /^\/api\/notices\/[0-9a-f-]{36}$/iu,
 });
+
+// Explicit synthetic ownership examples, confined to engine-verified fixture IDs.
+// Real owners require an operator-maintained server-side binding (not browser role).
+const FIXTURE = Object.freeze([
+  ['learner_fixture','aaaaaaaaaaaaaaaa','/notes/demo','note:demo',['GET','PUT']],
+  ['student_subject','0123456789abcdef','/notes/123','note:123',['GET']],
+  ['student_subject','0123456789abcdef','/notes','note:own-list',['GET']],
+  ['student_A','0123456789abcdef','/api/notes/11111111-1111-4111-8111-111111111111','note:11111111-1111-4111-8111-111111111111',['GET','PUT','DELETE']],
+  ['student_A','0123456789abcdef','/api/my/notes','note:own-list',['GET']],
+  ['student_A','0123456789abcdef','/api/notices','notice:class-list',['GET']],
+  ['student_B','fedcba9876543210','/api/notes/22222222-2222-4222-8222-222222222222','note:22222222-2222-4222-8222-222222222222',['GET','PUT']],
+].map(([subjectId,deviceId,path,resourceId,methods])=>({
+  classId:'class_fixture',projectId:'project_fixture',subjectId,deviceId,
+  service:'notes',path,resourceId,ownerSubjectId:resourceId.startsWith('note:')?subjectId:null,methods
+})));
+function resourceBindings(){
+  const raw=typeof process==='undefined'?null:process.env.ALEPH_RESOURCE_BINDINGS;
+  if(!raw)return FIXTURE;
+  if(raw.length>100000)return [];
+  try{
+    const items=JSON.parse(raw);
+    return Array.isArray(items)&&items.length<=1000?[...FIXTURE,...items]:[];
+  }catch{return []}
+}
+function ownsResource(r){
+  return resourceBindings().some(x=>x&&x.classId===r.classId&&x.projectId===r.projectId
+    &&x.subjectId===r.subjectId&&x.deviceId===r.deviceId
+    &&x.service===r.service&&x.path===r.path
+    &&Array.isArray(x.methods)&&x.methods.includes(r.method)
+    &&typeof x.resourceId==='string'
+    &&(x.resourceId.startsWith('note:')?x.ownerSubjectId===r.subjectId
+      :x.resourceId.startsWith('notice:')&&(r.method==='GET'||x.instructor===true))
+    &&(r.path.startsWith('/api/notices')===x.resourceId.startsWith('notice:')));
+}
 
 function riskCount(r) {
   const s = r?.signals;
@@ -54,7 +89,7 @@ export async function decide(r) {
   if (r?.schema !== 'aleph.decision.v1' || r.deviceRegistered !== true
     || typeof r.subjectId !== 'string' || !r.subjectId.trim()
     || typeof r.deviceId !== 'string' || !/^[a-f0-9]{16}$/u.test(r.deviceId)
-    || r.service !== 'notes') {
+    || !['notes', 'notices'].includes(r.service)) {
     return reply(r, 'deny', 'device_not_registered', 'device_registered');
   }
 
@@ -67,7 +102,10 @@ export async function decide(r) {
     || !(read ?? write).test(r.path) || (r.queryLength ?? 0) !== 0) {
     return reply(r, 'deny', 'route_not_allowed', 'route_not_allowed');
   }
-  if (write) return reply(r, 'deny', 'write_not_allowed', 'write_not_allowed');
+  if (!ownsResource(r)) {
+   if(write)return reply(r,'deny','write_not_allowed','write_not_allowed');
+   return reply(r,'deny','route_not_allowed','resource_zone');
+ }
 
   if (riskCount(r) >= 2 && !freshStepUp(r)) {
     return reply(r, 'step_up', 'step_up_required', 'step_up_required');

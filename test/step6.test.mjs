@@ -5,7 +5,7 @@ import { runAttackChecks } from '../src/attack-check.mjs';
 
 const validRequest = Object.freeze({
   schema:'aleph.decision.v1', requestId:'00000000-0000-4000-8000-000000000000',
-  subjectId:'student_subject', deviceId:'0123456789abcdef', deviceRegistered:true,
+  classId:'class_fixture', projectId:'project_fixture', subjectId:'student_subject', deviceId:'0123456789abcdef', deviceRegistered:true,
   service:'notes', method:'GET', path:'/notes/123', route:'GET /notes/:id',
 });
 const assertDecision = async (changes, expected, reason) => {

@@ -195,3 +195,9 @@ Supabase `defense.notes`는 RLS가 켜져 있습니다. `anon`에는 테이블 C
 - 엔진 요청 v1에는 행 소유자/강사 역할 필드가 없으므로 `POST`/`PUT`/`DELETE` 쓰기는 판정기에서 `write_not_allowed`로 거부합니다. 브라우저가 기존 `/api/notes`에서 자기 메모를 수정하는 기능과 서버 `owner_id` 검사는 그대로 유지됩니다. 운영 엔진을 실제로 연결할 때는 양쪽 정책을 별도로 일치시켜야 합니다.
 - `GET /api/my/notes`는 기존 메모 API의 소유자 필터를 재사용하는 읽기 전용 별칭입니다. 기존 화면/URL은 변경하지 않습니다. HTTP/가상 판정 추가 점검은 `npm run bundle`에 기록합니다.
 - `npm run test:r5`, `npm run test:6`, `npm run test:7`, `npm run test:8`, `npm run decider:test`, `npm run fixture:7`를 실행하고 최신 Production 배포 후 `npm run prepare:8 && npm run bundle`로 확인합니다. 실제 A/B 교차 계정 시험은 수행하지 않았다고 기록합니다.
+
+### 8단계 재보정 - 타인 소유 자원에 대한 무조건 허용 제거
+
+기존 판정기는 subjectId가 존재하는지만 확인했으며 누구 소유인지 비교하지 않았습니다. 8단계 보정은 엔진 검증 classId/projectId/subjectId/deviceId/service와 method, 정확한 path를 서버의 자원 소유 허용표와 함께 비교합니다. 다른 등록 기기와 사용자로 같은 메모를 요청하면 거부하고, 본인 자기 메모는 읽기/수정이 허용됩니다. 없는 바인딩은 fail-closed 처리합니다.
+
+class_fixture/project_fixture 예시는 이전 단계에서 제공된 **가상 테스트 전용** 자원입니다. 실제 사용자·메모 연결표는 공식 엔진 또는 운영자가 확인한 값만 서버의 ALEPH_RESOURCE_BINDINGS에 등록해야 하며 Git·브라우저 요청·user_metadata를 출처로 삼지 않습니다. 실제 운영 자원 바인딩과 A/B 시험 토큰이 없으므로 운영 계정 교차 조회 실측은 미실행입니다. 기존 Supabase notes.owner_id 검사와 강사 role 검증 API는 보존합니다. S08_OTHER_ZONE_ALLOWED로 심판이 사용한 비공개 요청은 별도로 확인이 필요하며 가상 테스트 PASS를 심판 판정으로 대체하지 않습니다.

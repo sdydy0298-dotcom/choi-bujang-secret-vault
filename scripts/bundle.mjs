@@ -119,7 +119,8 @@ try {
     }
     if(config.step===8){
       for(const id of ['stage8_known_zone_allow','stage8_unknown_route_deny','stage8_unauthorized_notices',
-        'stage8_all_notes_denied','stage8_notes_write_denied','stage8_student_notice_write_denied']){
+        'stage8_all_notes_denied','stage8_notes_write_denied','stage8_student_notice_write_denied',
+        'stage8_own_note_update_allow','stage8_cross_owner_read_denied','stage8_own_list_allow']){
         const c=attackAttempts.find(x=>x.attackId===id);
         if(!c||!c.observed.startsWith('통과:'))fail('8단계 자원 구역 검사 실패: '+id);
       }
