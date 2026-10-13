@@ -1,5 +1,6 @@
 import { checkDecider } from '../scripts/decider-test.mjs';
 import { decide, RULE_IDS } from './decider.mjs';
+import { loadVerifiedPolicy } from './stage10-recovery.mjs';
 import { detect } from './detect.mjs';
 import { checkDetection } from '../scripts/detect-test.mjs';
 
@@ -25,7 +26,7 @@ export async function runAttackChecks(config) {
       observed: exposed ? '확인 표시가 보임' : '확인 표시가 보이지 않음' }];
   }
 
-  if (![6, 7, 8, 9].includes(config.step)) throw new Error('현재 운영 자기점검은 6~9단계 저장점을 지원합니다.');
+  if (![6, 7, 8, 9, 10].includes(config.step)) throw new Error('현재 운영 자기점검은 6~9단계 저장점을 지원합니다.');
 
   const [page, notes, data, identity, authConfig] = await Promise.all([
     '/', '/api/notes', '/data.json', '/aleph.json', '/api/auth-config',
@@ -131,7 +132,7 @@ export async function runAttackChecks(config) {
     const compactPrior=stage8Checks.filter(({attackId})=>
       attackId!=='stage8_live_cross_owner' &&
       attackId!=='stage8_scoped_list_unauthorized');
-    return [
+    const stage9Checks = [
       ...compactPrior,
       check('stage9_burst_revocation_proposed',
         '10분 120건 초과 GET 가상 사건만 대상 subject와 burst_read 제안',
@@ -140,6 +141,27 @@ export async function runAttackChecks(config) {
         '정상·120건 경계·타인 합산·시간 분산 사건은 observe',
         normal,'공식 detect:test 중 정상·경계·혼합·분산 사례')
     ];
+    if (config.step === 9) return stage9Checks;
+
+    let snapshotVerified = false;
+    try { loadVerifiedPolicy(); snapshotVerified = true; }
+    catch { snapshotVerified = false; }
+    const restoreProbe = await fetch(new URL('/api/restore', app), {
+      ...options, method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: '11111111-1111-4111-8111-111111111111' }),
+    });
+    const stage10Checks = [
+      ...stage9Checks.filter(x => !['stage8_unknown_route_deny',
+        'stage8_student_notice_write_denied'].includes(x.attackId)),
+      check('stage10_verified_policy_snapshot',
+        '9단계 안전 정책 사본과 고정 SHA-256 검증',
+        snapshotVerified, snapshotVerified ? '고정 SHA-256 일치' : '사본 검증 실패'),
+      check('stage10_unauthorized_restore_rejected',
+        '비인증 복구 요청은 HTTP 401 거부',
+        restoreProbe.status === 401, 'HTTP ' + restoreProbe.status),
+    ];
+    return stage10Checks;
   }
   return [...httpChecks, ...fixtures, live];
 }

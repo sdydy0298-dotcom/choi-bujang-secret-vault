@@ -1,5 +1,16 @@
 # BYTE BACK 방어전 시작 틀 R5
 
+## 10단계 저장점 · 백업에서 자료실을 되살리기 (2026-10-13)
+
+- **이전 저장점**: 9단계 커밋 `d1004397ac47317cfdedddb483a652c1c300f8e2`의 메모 API, 로그인, A/B 소유권, 6~9단계 방어 규칙을 변경하지 않았습니다.
+- **정책 복원**: `recovery/stage9-safe-policy.json`을 고정 SHA-256으로 검증하고, 운영 정책이 아닌 로컬 시험 정책의 `services.notes` 변경 범위만 `npm run policy:10`으로 복구합니다. 타 서비스와 감사 기록은 보존합니다.
+- **비공개 메모 백업**: 침해 **이전 B 메모 생성 시점**에 `defense.note_recovery_backups`에 불변 백업을 남깁니다. 기존 메모를 소급 백업하지 않습니다. 감사 기록은 append-only입니다.
+- **단건 복구**: 서비스 `notes`, **POST `/api/restore`**, 본문 `{ "id": "<B 메모 UUID>" }`. 서버에서 ES256으로 검증된 판정기 B 신원만 받아 DB 소유자·실행 ID·해시를 확인하고 한 건만 원자적으로 복구합니다. B 이외와 백업 없음/손상 시에는 거부합니다.
+- **회귀 확인**: `npm run verify:10` → `npm run build -- --local` → `npm run policy:10 -- preview` → `npm run prepare:10` → `npm run bundle`. 구체적인 사전 설치·복구 뒤 확인 순서는 `docs/STAGE10_RECOVERY.md`에 기록했습니다.
+- **배포 URL**: https://secret-vault-sdydy0298.vercel.app · **저장소**: https://github.com/sdydy0298-dotcom/choi-bujang-secret-vault.
+- **실측 구분**: 로컬 모의 시험과 공식 심판의 변조·삭제·재침공 판정은 별개입니다.
+
+
 ## 9단계 저장점 · 도플갱어 탐지와 회수 제안 (2026-10-13)
 
 - **이전 저장점**: 8단계 코드까지 유지한 `r5-work`의 `fc27cfd4b3a9`을 기준으로 9단계만 추가했습니다. 1~8단계 접근 판정기, 메모 API, Supabase 소유권/RLS, 로그인 화면과 기존 자료는 변경하지 않았습니다.

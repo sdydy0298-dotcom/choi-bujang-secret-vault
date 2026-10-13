@@ -18,7 +18,11 @@
     "verify:8": "npm run test:r5 && npm run test:6 && npm run test:7 && npm run test:8 && npm run decider:test && npm run fixture:7",
     "test:9": "node --test test/step9.test.mjs",
     "prepare:9": "node scripts/prepare-stage9.mjs",
-    "verify:9": "npm run verify:8 && npm run detect:test && npm run test:9"
+    "verify:9": "npm run verify:8 && npm run detect:test && npm run test:9",
+    "test:10": "node --test test/step10.test.mjs",
+    "prepare:10": "node scripts/prepare-stage10.mjs",
+    "policy:10": "node scripts/stage10-policy.mjs",
+    "verify:10": "npm run verify:9 && npm run test:10"
   },
   "engines": {
     "node": ">=22"

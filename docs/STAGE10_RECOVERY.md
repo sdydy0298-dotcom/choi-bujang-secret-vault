@@ -1,0 +1,63 @@
+# 10단계 · 안전 정책과 B 메모 한 건 복구
+
+## 적용 범위와 선행 조건
+- 9단계 정상 저장점: `d1004397ac47317cfdedddb483a652c1c300f8e2`.
+- 공개 자료실: `https://secret-vault-sdydy0298.vercel.app`.
+- 복구 서비스: `notes`, 경로: **POST `/api/restore`**.
+- DB 사전 설치: `sql/stage10-recovery.sql` (Supabase migration `stage10_verified_b_note_recovery`). 이 변경은 사전 백업이 없는 기존 메모를 소급 복원하지 않습니다.
+- 1~9단계 인증/권한/탐지 규칙, 메모 6건, 기존 감사 기록은 별도 보존합니다.
+
+## 1. 정책 복원은 운영 정책이 아닌 시험 정책만
+먼저 `recovery/stage9-safe-policy.json`의 고정 SHA-256을 검증합니다. 검증이 실패하면 내용을 표시만 하더라도 변경을 적용하지 않습니다.
+
+```bash
+npm run policy:10 -- init-test
+npm run policy:10 -- preview
+npm run policy:10 -- restore-test --confirm
+npm run policy:10 -- preview
+```
+
+첫 preview에서 `services.notes.allowedRoutes`, `services.notes.blockedGlobalReads` 차이가 보여야 합니다.
+마지막 preview에서는 `changed: []`여야 합니다. 타 서비스(notices), 원래 auditEvents는 보존되며 시험 정책 복구 기록은 별도 append-only JSONL로 남습니다. 운영 엔진 정책·`src/decider.mjs`은 변경하지 않습니다.
+
+## 2. 비공개 사전 백업 및 B 메모 복구
+**주의: 정상 B 메모를 만들기 전에 DB 트리거가 설치되어 있어야 합니다.** 심판 B가 메모를 처음 INSERT할 때 `defense.note_recovery_backups`에 소유자·실행 ID·가상 메모 내용 해시가 고정됩니다. 사본의 변경/삭제가 차단됩니다.
+
+서명 검증된 심판 계정 B만 아래 POST를 호출할 수 있습니다.
+
+```http
+POST /api/restore
+Authorization: Bearer <서명된 시험 B JWT>
+Content-Type: application/json
+
+{"id":"<시험 B 메모 UUID>"}
+```
+
+- 인증 실패: 401; 다른 계정 또는 A: 403; 백업 없음: 404; 무결성/소유자 불일치: 409.
+- 성공: 200, `restored: true`, `id`, `owner_id`, `content_sha256`, `operation`.
+- DB 함수는 한 트랜잭션 안에서 backup/owner/run/B/해시를 재검사하고 **해당 메모 한 건만** 수정하거나 재삽입한 뒤 감사 로그에 행을 추가합니다.
+- 기존 다른 메모·규칙·감사 로그는 삭제하지 않습니다. `anon`과 `authenticated`에는 backup 열람/RPC 실행 권한을 부여하지 않습니다.
+
+### 설치 여부 읽기 전용 확인
+```sql
+SELECT table_name FROM information_schema.tables
+ WHERE table_schema='defense' AND table_name IN ('note_recovery_backups','note_restore_audit');
+SELECT tgname FROM pg_trigger WHERE tgname LIKE 'trg_stage10_%' AND NOT tgisinternal;
+SELECT count(*) AS original_notes FROM defense.notes;
+```
+
+## 3. 복원 후 1~9단계 회귀 순서
+1. 1~5단계: 정적 메모 비노출, 미인증 401, A 자기 CRUD 허용, B의 A 데이터 거부, 서버 API 경유.
+2. 6~7단계: 등록 기기 정상 허용, 미등록 거부, 복합 이상 시 추가 확인.
+3. 8단계: 전체 목록 거부, 강사 공지 쓰기 거부, 본인 UUID 단건 GET 허용, 타인 단건 GET 404.
+4. 9단계: 10분 120건은 observe, 121건은 propose_revocation / burst_read, 정상 주체는 observe.
+5. 10단계: 안전 사본 SHA 재검증, 시험 정책 notes만 복원, B 메모 한 건 복원 후 ID/owner/해시 대조, 다른 자원 및 감사 기록 유지.
+
+```bash
+npm run verify:10
+npm run build -- --local
+npm run prepare:10
+npm run bundle
+```
+
+`npm run bundle`은 **커밋 이후 깨끗한 Git 트리, 올바른 origin, 배포 READY와 단계/커밋 대조가 된 뒤에** 실행하세요. 실제 심판의 변조·삭제·재침공 3건은 로컬 모의 테스트만으로 통과를 주장하지 않습니다.

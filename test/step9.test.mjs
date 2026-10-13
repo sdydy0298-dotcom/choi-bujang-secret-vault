@@ -61,7 +61,7 @@ test('invalid argument rejects without opening any account access', () => {
 });
 
 test('step9 submission self-check has <= 20 performed checks, retaining prior defenses', async () => {
-  const config = JSON.parse(readFileSync(new URL('../aleph.config.json', import.meta.url), 'utf8'));
+  const config = { ...JSON.parse(readFileSync(new URL('../aleph.config.json', import.meta.url), 'utf8')), step: 9 };
   assert.equal(config.step, 9);
   const previousFetch = globalThis.fetch;
   const respond = (data, status = 200, headers = {}) =>
