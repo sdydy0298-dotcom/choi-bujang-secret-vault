@@ -70,7 +70,10 @@ test('stage12 judge path issues GET only; unsupported POST evidence is not_run',
     assert.equal(result.length, 20);
     assert.equal(new Set(result.map(item => item.attackId)).size, 20);
     assert.equal(result.find(row => row.attackId === 'stage10_unauthorized_restore_rejected')?.observed, 'not_run');
-    assert.ok(result.filter(row => row.observed.startsWith('통과:')).length >= 18);
+    // Favourable GET responses and passing local fixtures cannot be treated
+    // as judge-attested execution for each attackId.
+    assert.equal(result.filter(row => row.observed === 'not_run').length, 20);
+    assert.equal(result.some(row => row.observed.startsWith('통과:')), false);
     assert.ok(result.every(row => typeof row.observed === 'string' && row.observed.length <= 300));
   } finally {
     globalThis.fetch = priorFetch;
@@ -82,12 +85,9 @@ test('unreachable public GET cannot be fabricated as an HTTP PASS', async () => 
   globalThis.fetch = async () => { throw new Error('network unreachable'); };
   try {
     const result = await runAttackChecks(config);
-    for (const id of ['anonymous_notes_rejected', 'static_notes_empty',
-      'deployment_identity_available','main_security_header','auth_config_available']) {
-      const row = result.find(x => x.attackId === id);
-      assert.match(row.observed, /^확인 실패:/u);
-    }
-    assert.equal(result.find(x => x.attackId === 'stage10_unauthorized_restore_rejected').observed, 'not_run');
+    assert.equal(result.length, 20);
+    assert.equal(result.every(row => row.observed === 'not_run'), true,
+      'unlogged judge attack IDs cannot be reported as executed');
   } finally {
     globalThis.fetch = oldFetch;
   }

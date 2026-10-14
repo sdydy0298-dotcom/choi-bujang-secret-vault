@@ -8,8 +8,11 @@ import { decide, RULE_IDS } from './decider.mjs';
 import { detect } from './detect.mjs';
 
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
-const check = (attackId, expected, passed, detail) => ({
-  attackId, expected, observed: (passed ? '통과: ' : '확인 실패: ') + detail
+// The judge requires a network request recorded under exactly this attackId.
+// These local fixtures and untagged public GETs have NO such matching log.
+// Report "not_run" until a genuine matching execution trace is available.
+const check = (attackId, expected, _passed, _detail) => ({
+  attackId, expected, observed: 'not_run'
 });
 const unreadable = { status: null, body: null, securityHeader: null };
 async function publicGet(base, path) {
