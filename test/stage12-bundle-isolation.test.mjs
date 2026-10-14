@@ -24,6 +24,17 @@ test('stage12 bundle import graph uses only judge-supported built-ins', () => {
   assert.match(bundle, /config\.step\s*===\s*12\s*\?\s*'stage12-bundle-check\.mjs'/u);
 });
 
+test('judge bundle carries its own truthful stage-12 notes without prepare:12', () => {
+  const src = readFileSync(new URL('../scripts/bundle.mjs', import.meta.url), 'utf8');
+  assert.match(src, /const notes = config\.step === 12 \? stage12Notes/u);
+  assert.match(src, /기기 등록, 승인, 기기 전자서명 검증/u);
+  assert.match(src, /7단계 복합 이상 접속/u);
+  assert.match(src, /ALEPH SDP/u);
+  assert.match(src, /observed=not_run/u);
+  assert.match(src, /실측 행이 0건이면 0건으로 표시/u);
+  assert.match(src, /: JSON\.parse\(readFileSync\(join\(root, 'bundle-notes\.json'\)/u);
+});
+
 test('stage12 judge path issues GET only; unsupported POST evidence is not_run', async () => {
   const priorFetch = globalThis.fetch;
   const urls = [];

@@ -64,10 +64,10 @@ npm install
 npm run verify:12
 npm run build -- --local
 # 코드 검증/README 갱신 후 '12단계 저장점'으로 먼저 커밋한다.
-npm run prepare:12
-npm run bundle
+npm run bundle  # 12단계는 prepare:12 없이 심판 격리 환경에서 실행
+
 ```
 
-`npm run bundle`은 운영 Production 준비 완료, Git 작업 트리 정리, `/aleph.json`의 12단계 배포 확인 후 실행합니다. `bundle-notes.json` 및 `artifacts/submission.json`은 Git에 올리지 않습니다. 실제 운영 심판 제출은 사용자가 ALEPH 방어전 판정 사이트에서 진행합니다.
+`npm run bundle`은 운영 Production 준비 완료, Git 작업 트리 정리, `/aleph.json`의 12단계 배포 확인 후 실행합니다. `bundle-notes.json` 및 `artifacts/submission.json`은 Git에 올리지 않습니다. 12단계 제출 설명은 심판이 독립 실행 가능하도록 커밋된 `scripts/bundle.mjs`에 있으며, `prepare:12`는 선택적 로컬 설명 편집 도구로만 남깁니다. 실제 운영 심판 제출은 사용자가 ALEPH 방어전 판정 사이트에서 진행합니다.
 
 **되돌리기:** 먼저 `git status`, `git diff`, `git log -1`로 12단계 변경 파일을 구분하고, 제거될 내용을 승인받은 다음 해당 파일만 역패치하거나 역커밋합니다. **`git reset --hard`를 사용하지 않고**, 기존 Supabase 테이블·학생 메모·보안 정책을 삭제하지 않습니다.

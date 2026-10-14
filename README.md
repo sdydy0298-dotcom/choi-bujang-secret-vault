@@ -35,6 +35,12 @@ Production 배포는 Vercel에서 `npm run verify:12 && npm run build`로 검증
 - 모든 12단계 번들 항목은 실제 공개 응답, 로컬 가상 판정기·탐지 시험, 정책 사본 파일 검증 중 어느 결과인지 구분하며 실패·네트워크 차단을 통과로 바꾸지 않습니다. `npm run test:12`가 차단 환경과 GET 전용 모의 환경을 검증합니다.
 - GitHub Actions는 번들 생성 성공을 Production 커밋 대조보다 먼저 확인합니다. 로컬·CI 통과는 공식 41종 공격 재시험과 구별합니다.
 
+### 심판 제출 묶음 입력 안정성 (12단계)
+
+- **심판은 `npm run bundle`만 실행**할 수 있고 로컬 `npm run prepare:12`는 실행하지 않습니다. `bundle-notes.json`은 `.gitignore` 대상이므로 제출 설명·기기 규칙·학생/엔진 출처 구분을 `scripts/bundle.mjs`의 커밋된 12단계 설명에 고정했습니다.
+- 사용자가 작성한 임시 `bundle-notes.json`이 없거나 예전 내용이어도 **12단계 번들은 같은 진실한 설명**을 사용하며, 1~11단계 제출 방식은 바꾸지 않았습니다.
+- 검증: fresh checkout에서 `npm run bundle` 단독 실행과 오래된 설명 파일을 주입한 뒤의 재실행을 CI에서 각각 검증합니다. 자동 테스트 성공을 실제 41종 공격 통과라고 기록하지 않습니다.
+
 ### 저장점 검증 기준
 
 1. `npm install`과 `npm run verify:12`는 GitHub Actions의 새 Ubuntu 환경에서 직접 실행합니다.

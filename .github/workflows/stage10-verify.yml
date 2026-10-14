@@ -25,10 +25,20 @@ jobs:
         run: npm run verify:12
       - name: Local sanitized public build
         run: npm run build -- --local
-      - name: Prepare truthful stage 12 submission
-        run: npm run prepare:12
-      - name: Bundle submission
-        run: npm run bundle
+      - name: Judge-equivalent bundle (no prepare script and no local notes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e bundle-notes.json
+          npm run bundle
+          node --input-type=module -e "import {readFileSync} from 'node:fs';const x=JSON.parse(readFileSync('artifacts/submission.json','utf8'));if(x.step!==12 || !x.explanation.includes('기기 등록') || !x.explanation.includes('ALEPH SDP'))process.exit(1)"
+      - name: Judge-equivalent bundle with stale user-provided notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' '{"explanation":"AI에게 작성 부탁함","blockedAt":null}' > bundle-notes.json
+          npm run bundle
+          rm bundle-notes.json
       - name: Confirm Production points at this exact commit
         shell: bash
         env:
