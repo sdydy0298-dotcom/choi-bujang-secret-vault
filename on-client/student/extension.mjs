@@ -27,8 +27,15 @@ export function createStudentView() {
         const id = typeof item?.id === 'string' ? item.id.trim() : '';
         return label || id || '확인 불가';
       };
-      const stateLabel = (table, status) =>
-        Object.prototype.hasOwnProperty.call(table, status) ? table[status] : '확인 불가';
+      // 한국어 설명과 서버가 전달한 원래 상태 코드를 항상 함께 표시한다.
+      // 현재 기기·세션과 각각의 목록은 모두 이 공통 함수를 사용한다.
+      const stateLabel = (table, status) => {
+        const originalCode = typeof status === 'string' && status.trim() ? status : 'unknown';
+        const description = Object.prototype.hasOwnProperty.call(table, originalCode)
+          ? table[originalCode]
+          : '확인 불가';
+        return `${description}(${originalCode})`;
+      };
 
       const addText = (parent, tag, value, className) => {
         const element = document.createElement(tag);
