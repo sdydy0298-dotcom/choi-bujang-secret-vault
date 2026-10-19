@@ -55,11 +55,8 @@ jobs:
                     detail.appendChild(unsupported);
                   }
                   button.addEventListener('click', () => {'''
-          # Restore the exact two-space JS indentation from the local verified patch.
-          old_lines=old_action.splitlines()
-          old_action='\n'.join([old_lines[0],old_lines[1][10:]])
-          new_lines=new_action.splitlines()
-          new_action='\n'.join([new_lines[0]]+[line[10:] for line in new_lines[1:]])
+          # YAML run-block indentation already preserves each line's exact JS spaces.
+          # Do not dedent the source markers before replacing.
           if source.count(old_action)!=1: sys.exit('Safety stop: unsupported action insertion site differs.')
           source=source.replace(old_action,new_action)
           data=source.encode('utf-8')
