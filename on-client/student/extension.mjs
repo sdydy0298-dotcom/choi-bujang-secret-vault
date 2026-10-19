@@ -9,14 +9,14 @@ export function createStudentView() {
       root.className = 'student-identity-details';
 
       const deviceLabels = {
-        compliant: '정상',
-        noncompliant: '점검 필요',
+        compliant: '보안 기준 충족',
+        noncompliant: '보안 기준 미충족',
         unknown: '확인 불가',
       };
       const sessionLabels = {
-        active: '사용 중',
+        active: '활성',
         expired: '만료',
-        revoked: '취소',
+        revoked: '철회됨',
         unknown: '확인 불가',
       };
 
