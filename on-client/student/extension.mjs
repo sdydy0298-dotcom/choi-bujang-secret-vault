@@ -48,7 +48,7 @@ export function createStudentView() {
         } else if (mode === 'disconnected') {
           addText(parent, 'p', '연결 없음(disconnected) · 실제 연결 아님', 'state state-empty');
         } else if (mode === 'connected') {
-          addText(parent, 'p', '연결 상태: 연결됨', 'muted');
+          addText(parent, 'p', resource?.status === 'ok' ? '연결 모드: connected' : '연결 모드: connected · 현재 조회 성공은 확인되지 않음', 'muted');
         } else {
           addText(parent, 'p', '연결 상태 확인 불가(unknown)', 'state state-empty');
         }
