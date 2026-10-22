@@ -33,6 +33,30 @@ export const stage17OriginalSourceExcerpts = Object.freeze([
     "verbatimSource": "// 진행 중인 접속 판정과 AI 설명을 취소하고 판정 결과를 비운다.\nfunction cancelInteractive() {\n  if (accessController) accessController.abort();\n  accessController = null;\n  for (const controller of explainControllers.values()) controller.abort();\n  explainControllers.clear();\n  cancelAiCheck({ reset: true });\n  cancelExplanation({ reset: true });\n  state.access = { status: 'idle' };\n  trackError('access', state.access);\n  renderAccess();\n  renderStudent('decision');\n}"
   },
   {
+    "source": "on-client/public/app.js",
+    "sourceGitBlobSha": "002bfdf421f0005c14bb98dcbf3d0163f4be091d",
+    "originalLineStart": 560,
+    "originalLineEnd": 565,
+    "note": "Account relink invalidates stale AI check and resets to idle",
+    "verbatimSource": "function invalidateAppConnectView() {\n  if ((aiConnect && aiConnect.state.phase !== 'idle') || state.aiConnection.status !== 'idle') appConnectInvalidated = true;\n  if (aiConnect) aiConnect.reset();\n  cancelAiCheck({ reset: true });\n  renderAiConnect();\n}"
+  },
+  {
+    "source": "on-client/public/app.js",
+    "sourceGitBlobSha": "002bfdf421f0005c14bb98dcbf3d0163f4be091d",
+    "originalLineStart": 1180,
+    "originalLineEnd": 1185,
+    "note": "Student contract: AI connection and explanation inputs from current snapshot",
+    "verbatimSource": "function studentData(kind) {\n  if(kind==='action')return structuredClone(actionState);\n  if (kind === 'aiConnection') return { ...snapshot(state.aiConnection), checkedAt: state.aiConnection.meta?.checkedAt ?? null, explanationAccepted: false };\n  if (kind === 'explanation') return structuredClone({ event: state.selectedExplanation.event, explanation: snapshot(state.selectedExplanation.resource), checkedAt: state.selectedExplanation.resource.meta?.checkedAt ?? null });\n  if (kind === 'vulnerabilities') return snapshot(state.vulnerabilities);\n  if (kind === 'identity') return { me: snapshot(state.me), devices: snapshot(state.devices), sessions: snapshot(state.sessions) };"
+  },
+  {
+    "source": "on-client/public/app.js",
+    "sourceGitBlobSha": "002bfdf421f0005c14bb98dcbf3d0163f4be091d",
+    "originalLineStart": 1217,
+    "originalLineEnd": 1234,
+    "note": "Provided UI: renderStudent replaces older output with returned DOM",
+    "verbatimSource": "function renderStudent(kind) {\n  const { slot, fn } = STUDENT_SLOTS[kind];\n  const target = $(slot);\n  if (studentLoadFailed) {\n    return setChildren(target, stateBox('empty', `${STUDENT_PENDING} (student/extension.mjs를 불러오지 못했습니다)`));\n  }\n  if (!studentView || typeof studentView[fn] !== 'function') return setChildren(target, stateBox('empty', STUDENT_PENDING));\n  let output;\n  try {\n    output = studentView[fn](studentData(kind));\n  } catch {\n    return setChildren(target, stateBox('error', `학생 구현 ${fn} 실행 중 오류가 발생했습니다. 제공 UI는 계속 동작합니다.`));\n  }\n  // 학생 반환은 DOM 요소 또는 텍스트만 허용한다. 문자열은 HTML로 해석하지 않는다.\n  if (output instanceof Element) return setChildren(target, output);\n  if (typeof output === 'string') return setChildren(target, el('p', { className: 'student-text', text: output }));\n  if (output == null) return setChildren(target, stateBox('empty', STUDENT_PENDING));\n  setChildren(target, stateBox('error', `학생 구현 ${fn}의 반환 형식이 DOM 요소 또는 텍스트가 아닙니다.`));"
+  },
+  {
     "source": "on-client/src/server.mjs",
     "sourceGitBlobSha": "42774051fa29614e28f4f823db41fe33942166ed",
     "originalLineStart": 466,
