@@ -636,6 +636,7 @@ export function createStudentView() {
           REQUEST_TIMEOUT: '시간 초과: 잠시 뒤 사용자가 직접 다시 점검하세요.',
           ENGINE_TIMEOUT: '시간 초과: 잠시 뒤 사용자가 직접 다시 점검하세요.',
           TIMEOUT: '시간 초과: 잠시 뒤 사용자가 직접 다시 점검하세요.',
+          WB_CLCO_NETWORK_ERROR: 'AI 게이트 네트워크 연결 실패: 네트워크 상태를 확인하고 잠시 뒤 사용자가 직접 다시 점검하세요.',
           NETWORK_ERROR: '네트워크 연결 실패: 로컬 서버 연결을 확인한 뒤 직접 다시 점검하세요.',
           WB_CLCO_CANCELLED: '취소됨: 취소 이전 결과는 현재 점검 결과가 아닙니다.',
           CANCELLED: '취소됨: 취소 이전 결과는 현재 점검 결과가 아닙니다.',
