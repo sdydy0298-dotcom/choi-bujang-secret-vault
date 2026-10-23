@@ -735,11 +735,22 @@ export function createStudentView() {
         const validExplanation = data && typeof data.summary === 'string' && data.summary.trim()
           && data.summary.length <= 1500 && safeText(data.summary) === data.summary
           && Array.isArray(data.proposals) && data.requiresHumanConfirmation === true && data.executed === false;
+        // 제공 코드가 정상화한 제안이라도 현재 사건의 지원 조치와 인용 근거를 재확인한다.
+        const validProposals = Array.isArray(data?.proposals) && data.proposals.length <= 3
+          && data.proposals.every((proposal) => {
+            const refs = proposal?.evidenceIds;
+            return validId(proposal?.action) && Array.isArray(event.supportedActions)
+              && event.supportedActions.includes(proposal.action)
+              && typeof proposal.reason === 'string' && proposal.reason.trim()
+              && proposal.reason.length <= 500 && safeText(proposal.reason) === proposal.reason
+              && Array.isArray(refs) && refs.length > 0 && new Set(refs).size === refs.length
+              && refs.every((ref) => validId(ref) && sourceIds?.has(ref));
+          });
         // 제공 app.js도 검사하지만 학생 화면에서 받은 사건의 모든 근거와 인용을 다시 대조한다.
         const matched = references && sourceIds && references.length === sourceIds.size
           && new Set(references).size === references.length
           && references.every((ref) => validId(ref) && sourceIds.has(ref));
-        if (!validEvent || !validExplanation || !matched) {
+        if (!validEvent || !validExplanation || !matched || !validProposals) {
           addText(root, 'p', 'AI 설명 확인 불가 · 현재 사건의 근거가 부족하거나 인용한 근거 ID가 일치하지 않아 설명을 표시할 수 없습니다.', 'state state-error');
           if (typeof explanation?.error?.code === 'string' && /^[A-Z][A-Z0-9_]{0,79}$/.test(explanation.error.code)) {
             addText(root, 'p', '오류 코드: ' + safeCode(explanation.error.code), 'muted');
@@ -765,7 +776,32 @@ export function createStudentView() {
           const rulesList = document.createElement('ul');
           for (const row of rules) addText(rulesList, 'li', row.id + ' — ' + row.text);
           root.appendChild(rulesList);
-          // 3차: 현재 상태의 unknown과 제안 미실행을 이 성공 영역에 추가한다.
+          // unknown은 안전·정상이 아니라 원천 상태를 확인하지 못했다는 뜻이다.
+          addText(root, 'h4', '현재 상태의 확인 불가 항목');
+          const unknown = [['access', '접속'], ['session', '세션'], ['device', '기기']]
+            .filter(([key]) => event.state[key] === 'unknown');
+          if (unknown.length === 0) {
+            addText(root, 'p', '없음', 'muted');
+          } else {
+            const stateList = document.createElement('ul');
+            for (const [, label] of unknown) addText(stateList, 'li', label + ': 확인 불가(unknown)');
+            root.appendChild(stateList);
+          }
+          addText(root, 'h4', '조치 제안');
+          if (data.proposals.length === 0) {
+            addText(root, 'p', event.supportedActions.length === 0
+              ? '연동 시스템이 지원하는 조치가 없어 제안이 없습니다(정상).'
+              : 'AI가 이 사건에 제안한 조치가 없습니다.', 'muted');
+          } else {
+            const proposalList = document.createElement('ul');
+            for (const proposal of data.proposals) {
+              addText(proposalList, 'li', '조치: ' + proposal.action + ' — 이유: ' + proposal.reason
+                + ' · 근거 ID: ' + proposal.evidenceIds.join(', ') + ' · 미실행');
+            }
+            root.appendChild(proposalList);
+            addText(root, 'p', '사람 확인이 필요하며 실행되지 않았습니다.', 'muted');
+          }
+          addText(root, 'p', 'AI 설명과 제안은 참고용입니다. 보안 조치는 실행되지 않았습니다(executed:false).', 'muted');
         }
       } else {
         addText(root, 'p', 'AI 사건 설명 결과 확인 불가 · 사건 또는 설명 응답이 유효하지 않습니다.', 'state state-error');
