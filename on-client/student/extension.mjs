@@ -809,6 +809,69 @@ export function createStudentView() {
       }
       return root;
     },
-    renderAction() { return '학생 구현 대기: 현재 사건·조치·실제 대상·사람 확인·ACK와 원천 효과·unknown을 구분하세요.'; },
+    renderAction({ status = 'idle', event = null, actionId = null, target = null, receipt = null,
+      observation = null, message, confirmationExpiresAt, error } = {}) {
+      // 제공 UI가 상태 변경마다 다시 호출한다. 이전 사건/요청의 DOM과 성공 속성은 보관하지 않는다.
+      const root = document.createElement('section');
+      root.className = 'student-action-status';
+      const addText = (parent, tag, value, className) => {
+        const node = document.createElement(tag);
+        node.textContent = String(value);
+        if (className) node.className = className;
+        parent.appendChild(node);
+        return node;
+      };
+      const safeText = (value, fallback = '확인 불가') => {
+        if (typeof value !== 'string' || !value.trim() || value.length > 1500
+          || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)
+          || /(?:Bearer\s+\S+|sk-(?:proj-|ant-|svcacct-)?[A-Za-z0-9_-]{8,}|ghp_[A-Za-z0-9]+|github_pat_[A-Za-z0-9_]+|-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:api[_ -]?key|authorization|password|passwd|token|secret|비밀번호|토큰)\s*[:=]\s*\S+)/i.test(value)) return fallback;
+        return value;
+      };
+      const safeCode = (value) => typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,79}$/.test(value)
+        ? value : 'ACTION_RESULT_UNVERIFIED';
+      const known = ['idle', 'loading', 'prepared', 'executing', 'pending',
+        'succeeded', 'denied', 'failed', 'unknown', 'error', 'expired'];
+      const phase = known.includes(status) ? status : 'unknown';
+      if (phase === 'idle') {
+        addText(root, 'p', '아직 미실행(idle) · 조치를 요청하지 않았습니다.', 'state state-empty');
+        addText(root, 'p', safeText(message, '이 화면을 닫거나 취소해도 서버에 이미 전달된 조치가 되돌려지지는 않습니다.'), 'muted');
+      } else if (phase === 'loading') {
+        addText(root, 'p', '조치 준비 또는 연동 시스템 결과 조회 중(loading) · 아직 효과가 확인되지 않았습니다.', 'state state-loading');
+      } else if (phase === 'prepared') {
+        addText(root, 'p', '준비됨·미실행(prepared) · 사람 확인 전이며 보안 조치는 집행되지 않았습니다.', 'state state-loading');
+        addText(root, 'p', '제공 화면에서 실제 대상과 확인 기한을 확인한 후 사용자에게 명시적인 집행 확인이 필요합니다.', 'muted');
+      } else if (phase === 'executing') {
+        addText(root, 'p', '서버에 전달 중(executing) · 처리 결과가 아직 확인되지 않았습니다.', 'state state-loading');
+      } else if (phase === 'pending') {
+        addText(root, 'p', '서버 접수·처리 중(pending) · 접수 응답(ACK)은 효과 확인이나 완료를 의미하지 않습니다.', 'state state-loading');
+      } else if (phase === 'succeeded') {
+        // 효과 확인은 관측·사건·요청이 일치하는지를 검증한 뒤에만 표시한다.
+        addText(root, 'p', '연동 시스템 처리 결과 수신(succeeded) · 효과 관측 근거 확인 중입니다.', 'state state-loading');
+      } else if (phase === 'denied') {
+        addText(root, 'p', '연동 시스템 요청 거절(denied) · 효과 확인이 아닙니다.', 'state state-error');
+      } else if (phase === 'failed') {
+        addText(root, 'p', '연동 시스템 처리 실패(failed) · 효과 확인이 아닙니다.', 'state state-error');
+      } else if (phase === 'expired') {
+        addText(root, 'p', '사람 확인 기한 지남(expired) · 이 준비로는 집행할 수 없으므로 다시 준비하세요.', 'state state-error');
+      } else if (phase === 'error') {
+        addText(root, 'p', '조치 요청이 처리되지 않았습니다(error).', 'state state-error');
+        addText(root, 'p', '오류 코드: ' + safeCode(error?.code) + ' · ' + safeText(error?.message, '원인을 확인할 수 없습니다.'), 'state state-error');
+      } else {
+        addText(root, 'p', '결과 불명(unknown) · 효과가 없다고도 성공했다고도 판단하지 마세요.', 'state state-error');
+        addText(root, 'p', '제공 화면의 「연동 시스템 결과만 재조회」로 기존 요청의 결과만 확인하세요. 자동 재집행하지 않습니다.', 'muted');
+      }
+      if (['loading', 'denied', 'failed', 'unknown', 'expired'].includes(phase)
+        && typeof message === 'string' && message.trim()) {
+        addText(root, 'p', '서버 안내: ' + safeText(message), 'muted');
+      }
+      if (phase !== 'idle' && phase !== 'error' && typeof error?.code === 'string') {
+        addText(root, 'p', '상태 코드: ' + safeCode(error.code) + ' · ' + safeText(error.message), 'muted');
+      }
+      if (phase === 'idle' && Array.isArray(event?.supportedActions) && event.supportedActions.length === 0) {
+        addText(root, 'p', '연동 시스템이 지원하는 조치가 없어 준비 버튼이 표시되지 않는 것이 정상입니다.', 'muted');
+      }
+      addText(root, 'p', '실행·승인·결과 재조회는 제공 화면의 버튼을 사용하세요. 「조치 화면 취소」는 이미 전달된 효과의 취소가 아닙니다.', 'muted');
+      return root;
+    },
   };
 }
