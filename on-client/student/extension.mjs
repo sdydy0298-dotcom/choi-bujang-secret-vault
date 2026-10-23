@@ -845,8 +845,7 @@ export function createStudentView() {
       } else if (phase === 'pending') {
         addText(root, 'p', '서버 접수·처리 중(pending) · 접수 응답(ACK)은 효과 확인이나 완료를 의미하지 않습니다.', 'state state-loading');
       } else if (phase === 'succeeded') {
-        // 효과 확인은 관측·사건·요청이 일치하는지를 검증한 뒤에만 표시한다.
-        addText(root, 'p', '연동 시스템 처리 결과 수신(succeeded) · 효과 관측 근거 확인 중입니다.', 'state state-loading');
+        // 성공/관측 문구는 아래에서 현재 사건·요청·영수증·대상을 확인한 뒤에만 출력한다.
       } else if (phase === 'denied') {
         addText(root, 'p', '연동 시스템 요청 거절(denied) · 효과 확인이 아닙니다.', 'state state-error');
       } else if (phase === 'failed') {
@@ -918,6 +917,37 @@ export function createStudentView() {
         if (receipt && (receiptEventId !== null && eventId !== null && receiptEventId !== eventId
           || receiptActionId !== null && currentActionId !== null && receiptActionId !== currentActionId)) {
           addText(root, 'p', '현재 사건·조치와 수신 영수증이 일치하지 않습니다. 기존 요청을 다른 사건의 성공으로 사용하지 마세요.', 'state state-error');
+        }
+      }
+      if (phase === 'succeeded') {
+        const evidenceIds = Array.isArray(event?.evidence) ? event.evidence.map((row) => row?.id) : [];
+        const evidenceBound = evidenceIds.length > 0 && evidenceIds.every(validId)
+          && new Set(evidenceIds).size === evidenceIds.length;
+        const actionSupported = Array.isArray(event?.supportedActions)
+          && event.supportedActions.includes(currentActionId);
+        // 수신된 조치 준비 대상과 원본 사건의 대상이 함께 제공된 경우, 서로 다르면 성공으로 표시하지 않는다.
+        const sameTarget = !event?.target || (event.target?.id === targetId
+          && event.target?.generation === targetGeneration);
+        const observedAt = observation?.observedAt;
+        const validObservationTime = typeof observedAt === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/.test(observedAt)
+          && Number.isFinite(Date.parse(observedAt));
+        const verifiedEffect = observation?.effectApplied === true && validObservationTime
+          && receipt?.status === 'succeeded' && receipt?.superseded !== true
+          && currentIntentMatches && receiptVersion !== null
+          && targetId !== null && targetGeneration !== null
+          && evidenceBound && actionSupported && sameTarget;
+        if (verifiedEffect) {
+          root.setAttribute('data-student-action-event', eventId);
+          root.setAttribute('data-student-action-request', requestId);
+          addText(root, 'p', '효과 확인(succeeded) · 연동 시스템의 효과 관측 결과를 확인했습니다.', 'state state-ok');
+          addText(root, 'p', '관측 시각(observedAt): ' + observedAt, 'muted');
+          addText(root, 'p', 'effectApplied: true · 영수증 ID(receiptId): ' + receiptId, 'muted');
+          if (receipt.replayed === true) {
+            addText(root, 'p', '재조회된 동일 요청의 효과를 확인한 것입니다. 새로운 조치를 집행한 결과로 해석하지 않습니다.', 'muted');
+          }
+        } else {
+          addText(root, 'p', '결과 불명(unknown) · succeeded 상태만으로는 현재 사건에 적용된 효과를 확인할 수 없습니다.', 'state state-error');
+          addText(root, 'p', '관측값(effectApplied:true)과 사건·조치·대상·요청·영수증 결속을 확인해야 합니다. 성공이나 효과 없음으로 판단하지 말고 제공 화면에서 결과만 재조회하세요.', 'muted');
         }
       }
       addText(root, 'p', '실행·승인·결과 재조회는 제공 화면의 버튼을 사용하세요. 「조치 화면 취소」는 이미 전달된 효과의 취소가 아닙니다.', 'muted');
