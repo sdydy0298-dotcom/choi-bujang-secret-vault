@@ -704,13 +704,19 @@ export function createStudentView() {
         return value;
       };
       const status = explanation?.status || 'idle';
-      if (status === 'idle') {
-        addText(root, 'p', 'AI 사건 설명 요청 전 · 보안 기록에서 사건을 선택해 직접 요청하세요.', 'state state-empty');
+      // 오류 정보는 선택된 사건이 없더라도 반드시 우선 표시한다.
+      if (status === 'error') {
+        addText(root, 'p', 'AI 설명 실패(' + safeCode(explanation?.error?.code) + '): ' + safeText(explanation?.error?.message), 'state state-error');
+        if (['ON_AI_INVALID_INPUT', 'ON_AI_INVALID_OUTPUT'].includes(explanation?.error?.code)) {
+          addText(root, 'p', '사건 근거 부족, 근거 ID 불일치 또는 설명 응답의 검증 실패 가능성을 확인하세요.', 'muted');
+        }
+        addText(root, 'p', 'AI 설명이 실패해도 보안 기록과 접속 판정은 그대로 유지됩니다. 과제 실패로 처리하지 않으며 자동 재요청하지 않습니다.', 'muted');
+      } else if (event == null) {
+        addText(root, 'p', '보안 기록에서 기록을 먼저 고르세요. 사건을 선택한 뒤 AI 설명을 직접 요청할 수 있습니다.', 'state state-empty');
+      } else if (status === 'idle') {
+        addText(root, 'p', 'AI 사건 설명 요청 전 · 아직 설명을 실행하지 않았습니다.', 'state state-empty');
       } else if (status === 'loading') {
         addText(root, 'p', 'AI 사건 설명 요청 중 · 아직 생성된 설명이 없습니다.', 'state state-loading');
-      } else if (status === 'error') {
-        addText(root, 'p', 'AI 사건 설명 실패(' + safeCode(explanation?.error?.code) + '): ' + safeText(explanation?.error?.message), 'state state-error');
-        addText(root, 'p', 'AI 설명 요청이 실패해도 기존 접속 기록과 XDR 경보는 그대로 유지됩니다. 자동 재요청하지 않습니다.', 'muted');
       } else if (status === 'ok' && typeof event?.id === 'string' && event.id.trim() &&
         typeof explanation?.data?.summary === 'string' && explanation.data.summary.trim()) {
         // 성공을 확인한 실제 사건에만 식별 속성을 부여한다. 오류·취소·loading에는 부여하지 않는다.
