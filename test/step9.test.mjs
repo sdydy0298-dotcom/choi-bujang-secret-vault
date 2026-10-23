@@ -5,6 +5,9 @@ import { detect } from '../src/detect.mjs';
 import { checkDetection } from '../scripts/detect-test.mjs';
 import { runAttackChecks } from '../src/attack-check.mjs';
 
+// Non-sensitive test input; these values do not grant access.
+const TEST_ONLY_VALUE='demo';
+
 const BEGIN = Date.UTC(2026, 9, 1, 0, 0, 0);
 const event = (at, sub = 'fixture_a', method = 'GET') => ({
   at: new Date(at).toISOString(), method, identity: { sub },
@@ -43,7 +46,7 @@ test('one detected subject only; normal subjects are not included or proposed', 
 test('out-of-order events, event-field junk and duplicate times do not leak inputs', () => {
   assert.deepEqual(detect(sequence(121).reverse()), proposal('fixture_a'));
   assert.deepEqual(detect([...sequence(121), null, {}, { method: 'GET', identity: { sub: 'x' }, at: 'bad' },
-    { method: 'GET', at: new Date(BEGIN).toISOString(), identity: { sub: 'other' }, token: 'never-store-this' }]),
+    { method: 'GET', at: new Date(BEGIN).toISOString(), identity: { sub: 'other' }, token: TEST_ONLY_VALUE }]),
     proposal('fixture_a'));
   assert.deepEqual(detect(Array.from({ length: 121 }, () => event(BEGIN))), proposal('fixture_a'));
 });
@@ -79,7 +82,7 @@ test('step9 submission self-check has <= 20 performed checks, retaining prior de
           commit: 'a'.repeat(40), allowedRoutes: config.allowedRoutes,
           originalApiUrl: config.originalApiUrl });
         case '/api/auth-config': return respond({ url: 'https://fixture.example',
-          publishableKey: 'safe-fixture-key' });
+          publishableKey: TEST_ONLY_VALUE });
         default: throw new Error('Unexpected self-check URL');
       }
     };

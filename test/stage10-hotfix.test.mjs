@@ -7,6 +7,8 @@ import { bodySha256, runPostRestoreChecks } from '../src/stage10-retest.mjs';
 
 const config=JSON.parse(readFileSync(new URL('../aleph.config.json',import.meta.url),'utf8'));
 const ID='11111111-1111-4111-8111-111111111111';
+// Short canary is enough to detect accidental token output without using credential-like literals.
+const TEST_CANARY='canary';
 const baseline=JSON.parse(readFileSync(new URL('../recovery/stage9-safe-policy.json',import.meta.url),'utf8'));
 test('checks sealed policy twice on each restore request',()=>{
  let called=0;
@@ -43,7 +45,7 @@ test('retests signed owner GET, forbidden anonymous GET and labels A not_run',as
  const calls=[];
  const report=await runPostRestoreChecks({
    origin:'https://secret-vault-sdydy0298.vercel.app',
-   noteId:ID,token:'fixture-never-log',
+   noteId:ID,token:TEST_CANARY,
    expectedBodySha256:bodySha256('before compromise'),
    fetcher:async(_url,options)=>{
      calls.push({method:options.method,signed:Boolean(options.headers.Authorization)});
@@ -61,7 +63,7 @@ test('retests signed owner GET, forbidden anonymous GET and labels A not_run',as
  assert.equal(report.checks[6].outcome,'pass');
  assert.equal(report.checks[7].outcome,'not_run');
  assert.equal(report.allExecutedPassed,true);
- assert.equal(JSON.stringify(report).includes('fixture-never-log'),false);
+ assert.equal(JSON.stringify(report).includes(TEST_CANARY),false);
 });
 test('post-restore requests run concurrently without fabricated successes',{timeout:2500},async()=>{
  let count=0;
@@ -69,7 +71,7 @@ test('post-restore requests run concurrently without fabricated successes',{time
  const held=new Promise(resolve=>{releaseFirst=resolve});
  const report=await runPostRestoreChecks({
   origin:'https://secret-vault-sdydy0298.vercel.app',
-  noteId:ID,token:'fixture-not-a-secret',
+  noteId:ID,token:TEST_CANARY,
   expectedBodySha256:bodySha256('before compromise'),
   fetcher:async (_url,options)=>{
    count++;
@@ -88,7 +90,7 @@ test('post-restore requests run concurrently without fabricated successes',{time
 
 test('unavailable and incorrect HTTP observations cannot be marked PASS',async()=>{
  const failed=await runPostRestoreChecks({
-   origin:'https://secret-vault-sdydy0298.vercel.app', noteId:ID,token:'not-a-real-token',
+   origin:'https://secret-vault-sdydy0298.vercel.app', noteId:ID,token:TEST_CANARY,
    expectedBodySha256:bodySha256('before compromise'),
    fetcher:async()=>{throw Error('connection unavailable');}
  });

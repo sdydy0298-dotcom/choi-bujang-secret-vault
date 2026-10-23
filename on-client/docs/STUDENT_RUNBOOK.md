@@ -92,7 +92,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\start-alekov.ps1 -Po
 
 - **Native Host**: `-NativeHostConfig`는 ALEPH 계정 연결 확인·앱 승인 경로입니다. 앞선 사용자 작업에서 `tools/prepare-native-host.ps1`로 준비해 로컬 앱에서 6자리 계정 확인 화면까지 도달한 사실(B)이 있습니다. **그 계정의 실제 승인 성공은 미확인**입니다.
 - **SDP Host**: `-SdpHostConfig`는 본인 접근 판정·기기·접속/XDR 사건의 기존 원천을 연결하는 별도 옵션입니다. 두 설정 파일은 서로 대신할 수 없습니다.
-- **필수 제한:** 각 옵션은 담당자가 승인한 **현재 프로젝트에 맞는 기존 개인 설정 파일**이 실제 존재할 때에만 실행 도구에 지정합니다. 파일 경로·내용은 Git과 제출물 밖에 두고, 예시 `C:\AlekovPrivate\...`를 실제 존재하는 경로로 간주하지 않습니다. 설정값을 만들어 내거나 다른 사람의 자격을 복사하지 않습니다.
+- **필수 제한:** 각 옵션은 담당자가 승인한 **현재 프로젝트에 맞는 기존 개인 설정 파일**이 실제 존재할 때에만 실행 도구에 지정합니다. 파일 경로·내용은 Git과 제출물 밖에 두고, 이 문서에는 개인 설정 파일의 경로·내용을 기재하지 않습니다. 설정값을 만들어 내거나 다른 사람의 자격을 복사하지 않습니다.
 - 정확한 옵션·승인 버튼: [AI_SETUP_GUIDE.md](AI_SETUP_GUIDE.md), [SDP_HOST_CONNECTION.md](SDP_HOST_CONNECTION.md). 연결 확인 전에는 `connected` 성공으로 쓰지 않습니다.
 - **`npm.cmd run demo`** 는 제공 npm 스크립트 `node src/server.mjs --demo`를 수행합니다. 예제 화면만 확인하는 기능으로 **실연동 검사가 아닙니다**. `-Demo`와 `-SdpHostConfig`는 함께 사용하지 않습니다.
 
