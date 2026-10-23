@@ -870,6 +870,56 @@ export function createStudentView() {
       if (phase === 'idle' && Array.isArray(event?.supportedActions) && event.supportedActions.length === 0) {
         addText(root, 'p', '연동 시스템이 지원하는 조치가 없어 준비 버튼이 표시되지 않는 것이 정상입니다.', 'muted');
       }
+      // 현재 입력에 실제로 존재하는 값만 표시한다. 사용자 확인 티켓은 입력되지 않으며 저장하지 않는다.
+      const validId = (value) => typeof value === 'string'
+        && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/.test(value) && safeText(value) === value;
+      const eventId = validId(event?.id) ? event.id : null;
+      const currentActionId = validId(actionId) ? actionId : null;
+      const requestId = validId(receipt?.requestId) ? receipt.requestId : null;
+      const receiptId = validId(receipt?.receiptId) ? receipt.receiptId : null;
+      const receiptEventId = validId(receipt?.eventId) ? receipt.eventId : null;
+      const receiptActionId = validId(receipt?.actionId) ? receipt.actionId : null;
+      const targetId = validId(target?.id) ? target.id : null;
+      const targetGeneration = Number.isSafeInteger(target?.generation) && target.generation > 0 ? target.generation : null;
+      const receiptVersion = Number.isSafeInteger(receipt?.version) && receipt.version > 0 ? receipt.version : null;
+      const currentIntentMatches = eventId !== null && currentActionId !== null
+        && requestId !== null && receiptId !== null
+        && receiptEventId === eventId && receiptActionId === currentActionId;
+      if (phase !== 'idle' && phase !== 'error') {
+        const details = document.createElement('dl');
+        details.className = 'kv';
+        const field = (label, value) => {
+          if (value === null || value === undefined) return;
+          addText(details, 'dt', label);
+          addText(details, 'dd', value);
+        };
+        field('사건 ID', eventId);
+        if (eventId && Array.isArray(event?.evidence)) {
+          const ids = event.evidence.filter((item) => validId(item?.id)).map((item) => item.id);
+          if (ids.length) field('현재 사건 근거 ID', [...new Set(ids)].join(', '));
+        }
+        field('조치 ID', currentActionId);
+        field('실제 대상 ID', targetId);
+        field('대상 세대(generation)', targetGeneration);
+        field('요청 ID(requestId)', requestId);
+        field('영수증 ID(receiptId)', receiptId);
+        field('영수증 버전(version)', receiptVersion);
+        if (phase === 'prepared') {
+          field('사람 확인 기한(confirmationExpiresAt)',
+            typeof confirmationExpiresAt === 'string' ? safeText(confirmationExpiresAt) : null);
+        }
+        if (details.children.length) root.appendChild(details);
+        if (receipt?.replayed === true) {
+          addText(root, 'p', '중복 응답(replayed:true) · 동일 요청의 재조회·재전달이며 신규 집행의 증거가 아닙니다.', 'muted');
+        }
+        if (receipt?.superseded === true) {
+          addText(root, 'p', '이전 영수증(superseded:true)은 최신 관측 결과를 대신하지 않습니다. 결과만 재조회하세요.', 'state state-error');
+        }
+        if (receipt && (receiptEventId !== null && eventId !== null && receiptEventId !== eventId
+          || receiptActionId !== null && currentActionId !== null && receiptActionId !== currentActionId)) {
+          addText(root, 'p', '현재 사건·조치와 수신 영수증이 일치하지 않습니다. 기존 요청을 다른 사건의 성공으로 사용하지 마세요.', 'state state-error');
+        }
+      }
       addText(root, 'p', '실행·승인·결과 재조회는 제공 화면의 버튼을 사용하세요. 「조치 화면 취소」는 이미 전달된 효과의 취소가 아닙니다.', 'muted');
       return root;
     },
