@@ -884,6 +884,15 @@ export function createStudentView() {
       const currentIntentMatches = eventId !== null && currentActionId !== null
         && requestId !== null && receiptId !== null
         && receiptEventId === eventId && receiptActionId === currentActionId;
+      // 두 data-* 속성은 실행 성공 표시가 아니라 현재 사건과 요청의 식별자다.
+      // prepared/executing/pending 등의 정상 표시에도 연결하되 잘못 연결된 영수증은 제외한다.
+      const currentRequestIdentified = phase !== 'idle' && eventId !== null && requestId !== null
+        && (receipt?.eventId === undefined || receiptEventId === eventId)
+        && (receipt?.actionId === undefined || receiptActionId === currentActionId);
+      if (currentRequestIdentified) {
+        root.setAttribute('data-student-action-event', eventId);
+        root.setAttribute('data-student-action-request', requestId);
+      }
       if (phase !== 'idle' && phase !== 'error') {
         const details = document.createElement('dl');
         details.className = 'kv';
@@ -937,8 +946,6 @@ export function createStudentView() {
           && targetId !== null && targetGeneration !== null
           && evidenceBound && actionSupported && sameTarget;
         if (verifiedEffect) {
-          root.setAttribute('data-student-action-event', eventId);
-          root.setAttribute('data-student-action-request', requestId);
           addText(root, 'p', '효과 확인(succeeded) · 연동 시스템의 효과 관측 결과를 확인했습니다.', 'state state-ok');
           addText(root, 'p', '관측 시각(observedAt): ' + observedAt, 'muted');
           addText(root, 'p', 'effectApplied: true · 영수증 ID(receiptId): ' + receiptId, 'muted');
