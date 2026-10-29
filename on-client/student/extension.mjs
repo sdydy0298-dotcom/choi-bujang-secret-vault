@@ -1,11 +1,23 @@
 
-// 마지막 총공세 · 2일차 학생 확장. 제공 서버의 /api/pc/status(0.2.21+)를 읽기만 한다.
+// 마지막 총공세 · 2~4일차 학생 확장. 제공 서버의 /api/pc/status(0.2.21+)를 읽기만 한다.
 // 값은 요청을 누를 때만 읽고 브라우저 메모리에 최대 16회 보관한다. 예제 수치를 만들지 않는다.
 function createKeshevDay2(api, onChange) {
   const API_PATH = '/api/pc/status';
   const rows = [];
   let pending = false;
-  const redraw = typeof onChange === 'function' ? onChange : () => {};
+  let justFailed = false;
+  const redrawView = typeof onChange === 'function' ? onChange : () => {};
+  // 제공 UI가 student 슬롯 전체를 교체하므로 사용자 조회 버튼의 키보드 초점을 되찾는다.
+  const redraw = (keepFocus = false) => {
+    redrawView();
+    if (keepFocus && typeof document.querySelector === 'function') {
+      const control = document.querySelector('[data-keshev-refresh="true"]');
+      if (control && typeof control.focus === 'function') {
+        try { control.focus({ preventScroll: true }); }
+        catch { control.focus(); }
+      }
+    }
+  };
   const palette = { ink: '#ecf2ff', dim: '#9cabc4', panel: '#111d31', edge: '#29374f', cyan: '#5dd9e8', violet: '#a99bff', amber: '#ffd18b' };
   const $ = (tag, text, className) => {
     const n = document.createElement(tag);
@@ -29,6 +41,11 @@ function createKeshevDay2(api, onChange) {
   const n = value => typeof value === 'number' && Number.isFinite(value) && value >= 0;
   const percent = value => n(value) && value <= 100;
   const count = value => Number.isSafeInteger(value) && value >= 0;
+  const PC_KEYS = Object.freeze(['cpu', 'memory', 'disk', 'network', 'firewall', 'events']);
+  const PC_LABELS = Object.freeze({
+    cpu: 'CPU 사용률', memory: '메모리 사용률', disk: '디스크 여유 공간',
+    network: '네트워크 구성', firewall: 'Windows 방화벽', events: 'Windows 이벤트'
+  });
   const gib = bytes => (bytes / 1073741824).toFixed(1) + ' GiB';
   const reasons = Object.freeze({
     permission_denied: '읽기 권한 없음', query_failed: 'OS 조회 실패',
@@ -75,8 +92,11 @@ function createKeshevDay2(api, onChange) {
   }
   async function measure() {
     if (pending) return;
+    const keepFocus = typeof document.activeElement?.getAttribute === 'function'
+      && document.activeElement.getAttribute('data-keshev-refresh') === 'true';
     pending = true;
-    redraw();
+    justFailed = false;
+    redraw(keepFocus);
     const requestedAt = new Date().toISOString();
     let result;
     try {
@@ -103,8 +123,74 @@ function createKeshevDay2(api, onChange) {
     rows.unshift(row);
     if (rows.length > 16) rows.pop();
     pending = false;
-    redraw();
+    justFailed = !row.ok || PC_KEYS.some(key => !row[key]?.ok);
+    redraw(keepFocus);
   }
+
+  // 이미 구현된 로컬 관제 기능 세 개만 한눈에 보여 준다. 제공 UI 카드를 복제하지 않는다.
+  function coreFeatureGuide() {
+    const section = css($('section'), { margin: '0 0 18px', padding: '14px', border: '1px solid #30425c',
+      borderRadius: '13px', background: 'linear-gradient(120deg, #15243a, #102137)' });
+    text(section, 'h4', '핵심 기능 3가지', { margin: '0 0 12px', color: palette.ink, fontSize: '14px',
+      letterSpacing: '-.015em' });
+    const summaries = [
+      ['01', '시스템 자원', 'CPU · 메모리 · 디스크 사용량'],
+      ['02', '네트워크 보안', '네트워크 구성 · Windows 방화벽'],
+      ['03', '시스템 기록', 'Windows System · Application 경고·오류']
+    ];
+    const grid = css($('div'), { display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit,minmax(175px,1fr))', gap: '9px' });
+    summaries.forEach(([number, heading, description]) => {
+      const item = css($('div'), { padding: '11px 12px', background: '#111f34',
+        borderRadius: '9px', border: '1px solid #2a3d55', minWidth: '0' });
+      text(item, 'span', number + '  /  ' + heading,
+        { display: 'block', color: palette.cyan, fontSize: '12px', fontWeight: '700' });
+      text(item, 'span', description, { display: 'block', marginTop: '6px', fontSize: '11px',
+        lineHeight: '1.6', color: palette.dim });
+      put(grid, item);
+    });
+    put(section, grid);
+    return section;
+  }
+  function nextStep(reason, code) {
+    if (code === 'NOT_ALLOWED') return '공식 시작 틀 0.2.21의 학생 조회 API 사용 가능 여부를 확인한 뒤 수동으로 다시 조회하세요.';
+    if (code === 'NETWORK_ERROR' || code === 'REQUEST_FAILED') return '5189 포트의 케셰브 서버가 실행 중인지 확인하고 다시 조회하세요.';
+    if (code === 'STALE_READING') return 'PC의 날짜와 시간을 확인하고 다시 조회하세요. 오래된 값은 현재값으로 사용하지 않습니다.';
+    if (reason === '읽기 권한 없음') return '관리자 권한을 강제로 사용하지 마세요. 담당자에게 읽기 권한을 확인한 뒤 다시 조회하세요.';
+    if (reason === '운영체제 미지원') return '이 운영체제에서는 수집할 수 없는 항목입니다. 지원되는 Windows PC에서 확인하세요.';
+    if (reason === '조회 시간 초과') return '조회가 시간 초과되었습니다. PC 부하와 서버 상태를 확인한 뒤 직접 다시 조회하세요.';
+    if (reason === '측정 표본 오류') return '측정 표본이 유효하지 않습니다. 잠시 후 직접 다시 조회하세요.';
+    if (reason === '응답 형식 오류' || reason === '실측값 확인 불가') return '제공 API와 시작 틀 버전을 확인하고 다시 조회하세요. 임의 값으로 채우지 않습니다.';
+    return '케셰브를 실행한 PowerShell 창의 오류를 확인하고 직접 다시 조회하세요.';
+  }
+  function failuresPanel(latest) {
+    if (!latest || pending) return null;
+    const names = latest.ok ? PC_KEYS.filter(key => !latest[key]?.ok) : PC_KEYS;
+    if (!names.length) return null;
+    const box = css($('section'), { background: '#2c2529', color: '#ffe8d1',
+      border: '1px solid #80513b', borderRadius: '12px', padding: '15px 17px', marginTop: '13px' });
+    box.setAttribute('aria-label', '조회하지 못한 항목 및 다음에 할 일');
+    if (justFailed) box.setAttribute('role', 'alert');
+    text(box, 'h4', '조회하지 못한 항목 ' + names.length + '개', { margin: '0 0 6px',
+      fontSize: '14px', color: '#ffe5c9' });
+    text(box, 'p', '마지막으로 요청한 조회에서 확인하지 못한 항목입니다. 이전 실측값이나 예시 값으로 대신하지 않습니다.',
+      { margin: '0 0 10px', fontSize: '11px', lineHeight: '1.7', color: '#e8c2a9' });
+    const list = css($('ul'), { padding: 0, margin: 0, display: 'grid', gap: '7px', listStyle: 'none' });
+    names.forEach(key => {
+      const item = css($('li'), { padding: '10px 12px', background: '#392c2d',
+        borderRadius: '8px', fontSize: '11px', lineHeight: '1.7' });
+      const failed = latest[key];
+      const cause = latest.ok ? failed?.cause || '실측값 확인 불가' : '조회 전체 실패 (' + (latest.code || 'UNKNOWN') + ')';
+      text(item, 'strong', PC_LABELS[key] + ' · 확인 불가 · 이유: ' + cause,
+        { display: 'block', color: '#ffe5d4', fontSize: '12px', fontWeight: '700' });
+      text(item, 'span', '다음에 할 일: ' + nextStep(cause, latest.code),
+        { display: 'block', marginTop: '3px', color: '#f0cbb4' });
+      put(list, item);
+    });
+    put(box, list);
+    return box;
+  }
+
   function chip(label, color = palette.cyan) {
     return css($('span', label), {
       display: 'inline-flex', alignItems: 'center', borderRadius: '999px',
@@ -307,7 +393,10 @@ function createKeshevDay2(api, onChange) {
   }
 
   function drawChart() {
-    const outer = css($('div'), { background: '#0d1829', border: '1px solid ' + palette.edge, borderRadius: '14px', padding: '17px', minWidth: '0' });
+    const outer = css($('div'), { background: '#0d1829', border: '1px solid ' + palette.edge,
+      borderRadius: '14px', padding: '17px', minWidth: '0' });
+    outer.setAttribute('role', 'region');
+    outer.setAttribute('aria-label', 'CPU와 메모리 실측 추이 그래프');
     text(outer, 'h4', 'CPU · 메모리 사용률 추이', { margin: '0 0 5px', fontSize: '14px', color: palette.ink });
     text(outer, 'p', '수동 조회 기준 · 최근 12회 · 브라우저 메모리에만 유지', { margin: '0 0 15px', fontSize: '11px', color: palette.dim });
     const samples = rows.slice(0, 12).reverse();
@@ -352,7 +441,13 @@ function createKeshevDay2(api, onChange) {
     return outer;
   }
   function activity() {
-    const outer = css($('div'), { background: '#0d1829', border: '1px solid ' + palette.edge, borderRadius: '14px', padding: '17px', minWidth: '0' });
+    const outer = css($('div'), { background: '#0d1829', border: '1px solid ' + palette.edge,
+      borderRadius: '14px', padding: '17px', minWidth: '0', maxHeight: '355px', overflowY: 'auto' });
+    outer.setAttribute('role', 'region');
+    outer.setAttribute('aria-label', '최근 실측 기록과 측정 시각, CPU와 메모리 측정값');
+    outer.setAttribute('tabindex', '0');
+    outer.addEventListener('focus', () => { outer.style.outline = '2px solid #9ae9f2'; outer.style.outlineOffset = '2px'; });
+    outer.addEventListener('blur', () => { outer.style.outline = ''; });
     text(outer, 'h4', '최근 측정 기록', { margin: '0 0 5px', fontSize: '14px', color: palette.ink });
     text(outer, 'p', '조회 기록은 새로고침하면 지워집니다 · 외부 전송 없음', { margin: '0 0 14px', fontSize: '11px', color: palette.dim });
     if (!rows.length) {
@@ -367,7 +462,11 @@ function createKeshevDay2(api, onChange) {
         (row.code === 'NOT_ALLOWED' ? '조회 API 미지원 · 시작 틀 0.2.21 확인' : '조회 실패 · ' + row.code);
       const column = css($('div'), { flex: '1', minWidth: '0' });
       text(column, 'strong', message, { display: 'block', fontSize: '11px', lineHeight: '1.5', fontWeight: '600', color: palette.ink });
-      text(column, 'span', dateText(row.at), { fontSize: '10px', color: palette.dim });
+      text(column, 'span', dateText(row.at), { display: 'block', fontSize: '10px', color: palette.dim });
+      if (row.ok && row.cpu?.ok && row.memory?.ok) {
+        text(column, 'span', 'CPU ' + row.cpu.headline + ' · 메모리 ' + row.memory.headline,
+          { display: 'block', marginTop: '5px', fontSize: '11px', color: palette.cyan });
+      }
       put(line, column);
       put(outer, line);
     });
@@ -381,26 +480,42 @@ function createKeshevDay2(api, onChange) {
       margin: '0 0 22px', boxShadow: '0 15px 40px rgba(11,22,41,.14)'
     });
     panel.setAttribute('aria-label', '케셰브 로컬 실측 관제 대시보드');
+    if (pending) panel.setAttribute('aria-busy', 'true');
     const head = css($('div'), { display: 'flex', flexWrap: 'wrap', gap: '14px', alignItems: 'center', justifyContent: 'space-between', marginBottom: '21px' });
     const titleBox = $('div');
     text(titleBox, 'p', 'KESHEV  /  LOCAL OBSERVABILITY', { margin: '0 0 8px', color: palette.cyan, fontSize: '10px', letterSpacing: '.16em', fontWeight: '800' });
     text(titleBox, 'h3', '내 PC 관제 대시보드', { margin: 0, color: palette.ink, fontSize: 'clamp(20px, 2.5vw, 28px)', letterSpacing: '-.04em' });
     text(titleBox, 'p', 'PC 실측 정보와 SDP·XDR 원천 상태를 명확히 분리합니다.', { margin: '7px 0 0', fontSize: '12px', color: palette.dim });
     const actions = css($('div'), { display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' });
-    const successful = latest && latest.ok ? ['cpu', 'memory', 'disk', 'network', 'firewall', 'events'].filter(key => latest[key] && latest[key].ok).length : 0;
+    const successful = latest && latest.ok ? PC_KEYS.filter(key => latest[key] && latest[key].ok).length : 0;
     actions.appendChild(chip(pending ? '측정 중' : latest && latest.ok ? '● PC 실측 ' + successful + '/6' : rows.length ? '▲ 조회 확인 필요' : '○ 조회 전', pending ? palette.amber : latest && latest.ok && successful === 6 ? palette.cyan : palette.amber));
-    const button = css($('button', pending ? '측정 중…' : rows.length ? '다시 조회' : '내 PC 조회'), {
+    const button = css($('button', pending ? '새로 읽는 중…' : rows.length ? '다시 조회' : '조회'), {
       padding: '10px 15px', borderRadius: '9px', border: '1px solid #60d8e6',
       color: '#081522', background: '#68dfed', fontWeight: '750', fontSize: '12px',
       cursor: pending ? 'wait' : 'pointer'
     });
     button.type = 'button';
-    button.disabled = pending;
-    button.setAttribute('aria-label', '이 PC의 CPU 메모리 디스크 네트워크 방화벽 Windows 이벤트 기록을 읽기 전용으로 조회합니다');
-    button.addEventListener('click', measure);
+    button.setAttribute('data-keshev-refresh', 'true');
+    button.setAttribute('aria-disabled', pending ? 'true' : 'false');
+    button.setAttribute('aria-label', pending ? '새로 읽는 중…' : rows.length ? '다시 조회' : '조회');
+    button.title = '이 PC의 여섯 가지 정보를 읽기 전용으로 한 번만 조회합니다';
+    button.addEventListener('focus', () => { button.style.outline = '3px solid #e7f6ff'; button.style.outlineOffset = '3px'; });
+    button.addEventListener('blur', () => { button.style.outline = ''; });
+    button.addEventListener('click', () => { if (!pending) void measure(); });
     put(actions, button);
     put(head, titleBox, actions);
     put(panel, head);
+    // 4일차: 세 가지 핵심 기능을 숫자 카드보다 먼저 안내한다.
+    put(panel, coreFeatureGuide());
+    const feedback = text(panel, 'p',
+      pending ? '새로 읽는 중… 이번 조회 결과를 기다리고 있습니다. 이전 값은 현재 값처럼 표시하지 않습니다.' :
+      latest && latest.ok ? '실측 ' + successful + '/6 · 측정 시각 ' + dateText(latest.at) +
+        (successful === 6 ? ' · 여섯 항목 모두 조회됨' : ' · 확인 불가 항목은 아래에서 원인 확인') :
+      rows.length ? '이번 조회 실패 · 확인 불가 항목과 다음에 할 일을 확인하세요.' :
+      '아직 측정하지 않았습니다. 조회 버튼을 누르면 이 PC에서 실제 값을 읽습니다.',
+      { margin: '0 0 13px', fontSize: '12px', lineHeight: '1.6', color: pending ? palette.amber : palette.dim });
+    feedback.setAttribute('role', 'status');
+    feedback.setAttribute('aria-live', 'polite');
     const grid = css($('div'), { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(175px,1fr))', gap: '12px' });
     const metrics = latest && latest.ok ? latest : {};
     put(grid,
@@ -409,13 +524,10 @@ function createKeshevDay2(api, onChange) {
       card('디스크 여유 공간', metrics.disk, '03', latest && latest.at),
       connectionCard(mode));
     put(panel, grid);
+    const errors = failuresPanel(latest);
+    if (errors) put(panel, errors);
+    justFailed = false;
     put(panel, securitySection(latest, mode));
-    if (latest && !latest.ok) {
-      const help = latest.code === 'NOT_ALLOWED' ? '기존 시작 틀에서는 학생 PC 조회가 허용되지 않습니다. 공식 0.2.21 보존 업데이트를 먼저 적용하세요.' :
-        latest.code === 'STALE_READING' ? '측정 시각이 현재와 60초 이상 차이 납니다. 오래된 값을 실측으로 사용하지 않았습니다.' :
-        '조회 실패 (' + latest.code + ') · 실행 중인 서버와 시작 틀을 확인한 뒤 직접 다시 조회하세요.';
-      text(panel, 'p', help, { margin: '12px 0 0', background: '#382a26', padding: '12px 14px', borderRadius: '8px', color: '#ffe2b6', fontSize: '12px' }).setAttribute('role', 'alert');
-    }
     const lower = css($('div'), { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '12px', marginTop: '14px' });
     put(lower, drawChart(), activity());
     put(panel, lower);
