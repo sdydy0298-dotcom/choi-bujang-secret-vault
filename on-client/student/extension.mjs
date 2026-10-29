@@ -28,6 +28,7 @@ function createKeshevDay2(api, onChange) {
   };
   const n = value => typeof value === 'number' && Number.isFinite(value) && value >= 0;
   const percent = value => n(value) && value <= 100;
+  const count = value => Number.isSafeInteger(value) && value >= 0;
   const gib = bytes => (bytes / 1073741824).toFixed(1) + ' GiB';
   const reasons = Object.freeze({
     permission_denied: '읽기 권한 없음', query_failed: 'OS 조회 실패',
@@ -49,6 +50,27 @@ function createKeshevDay2(api, onChange) {
       const free = 100 * raw.freeBytes / raw.totalBytes;
       return { ok: true, value: free, headline: gib(raw.freeBytes), detail: '남은 공간 · 전체 ' + gib(raw.totalBytes) + ' (' + free.toFixed(1) + '% 여유)', usage: 100 - free };
     }
+
+    if (key === 'network' && count(raw.interfaceCount) && count(raw.ipv4Count)) {
+      return { ok: true, interfaceCount: raw.interfaceCount, ipv4Count: raw.ipv4Count,
+        headline: raw.interfaceCount + '개', detail: '주소가 있는 외부 인터페이스 ' + raw.interfaceCount + '개 · IPv4 구성 ' + raw.ipv4Count + '개' };
+    }
+    if (key === 'firewall' && Array.isArray(raw.profiles) && raw.profiles.length === 3) {
+      const names = ['Domain', 'Private', 'Public'];
+      const profiles = names.map(name => raw.profiles.find(item => item && item.name === name));
+      if (profiles.every(item => item && typeof item.enabled === 'boolean')
+          && new Set(raw.profiles.map(item => item && item.name)).size === 3) {
+        return { ok: true, profiles: profiles.map((item, i) => ({ name: names[i], enabled: item.enabled })),
+          enabledCount: profiles.filter(item => item.enabled).length };
+      }
+    }
+    if (key === 'events' && count(raw.warningCount) && count(raw.errorCount)
+        && raw.warningCount + raw.errorCount <= 5000 && raw.sampleLimit === 5000
+        && typeof raw.truncated === 'boolean' && typeof raw.since === 'string'
+        && Number.isFinite(Date.parse(raw.since))) {
+      return { ok: true, warningCount: raw.warningCount, errorCount: raw.errorCount,
+        truncated: raw.truncated, since: raw.since, sampleLimit: raw.sampleLimit };
+    }
     return fail();
   }
   async function measure() {
@@ -69,7 +91,8 @@ function createKeshevDay2(api, onChange) {
         const m = result.data.metrics || {};
         row = {
           ok: true, at: result.data.measuredAt,
-          cpu: metric(m.cpu, 'cpu'), memory: metric(m.memory, 'memory'), disk: metric(m.disk, 'disk')
+          cpu: metric(m.cpu, 'cpu'), memory: metric(m.memory, 'memory'), disk: metric(m.disk, 'disk'),
+          network: metric(m.network, 'network'), firewall: metric(m.firewall, 'firewall'), events: metric(m.events, 'events')
         };
       }
     } else {
@@ -138,6 +161,149 @@ function createKeshevDay2(api, onChange) {
     text(block, 'span', '출처: 케셰브 SDP · PC 실측 아님', { fontSize: '10px', marginTop: 'auto', color: '#8296b8' });
     return block;
   }
+
+  // 공식 0.2.21의 로컬 PC 읽기 전용 결과만 사용한다. 이벤트 본문, IP 주소, 식별자, 계정은 표시하지 않는다.
+  function securityCard(title, index, record, type, at) {
+    const box = css($('article'), { background: '#111d31', border: '1px solid #29374f',
+      borderRadius: '14px', padding: '16px', minWidth: '0', display: 'flex', flexDirection: 'column', gap: '11px' });
+    const top = css($('div'), { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' });
+    text(top, 'strong', title, { fontSize: '13px', fontWeight: '700', color: palette.ink });
+    top.appendChild(chip(index, palette.dim));
+    put(box, top);
+    const data = record && record.ok ? record : null;
+    if (!data) {
+      text(box, 'strong', pending ? '조회 중…' : rows.length ? '확인 불가' : '조회 전',
+        { fontSize: '23px', color: palette.amber, letterSpacing: '-.03em' });
+      text(box, 'p', pending ? '이번 측정값을 기다리고 있습니다.' :
+        rows.length ? record && record.cause ? '사유: ' + record.cause : '사유: 로컬 상태 조회 실패' :
+        '아직 이 PC를 조회하지 않았습니다.', { margin: 0, color: palette.dim, fontSize: '12px', lineHeight: '1.6' });
+      text(box, 'span', '실측값 없음 · 이전 값으로 대체하지 않음', { marginTop: 'auto', color: '#879bb9', fontSize: '10px' });
+      return box;
+    }
+    if (type === 'network') {
+      text(box, 'strong', data.interfaceCount + '개 인터페이스',
+        { fontSize: '21px', color: palette.cyan, letterSpacing: '-.03em' });
+      text(box, 'p', '외부 네트워크 인터페이스 ' + data.interfaceCount + '개 · IPv4 구성 ' + data.ipv4Count + '개',
+        { margin: 0, fontSize: '12px', lineHeight: '1.7', color: palette.ink });
+      text(box, 'p', '주소가 있는 비루프백 구성 요약이며 인터넷 접속 또는 SDP 연결 확인은 아닙니다.',
+        { margin: 0, fontSize: '11px', lineHeight: '1.6', color: palette.dim });
+    } else if (type === 'firewall') {
+      text(box, 'strong', data.enabledCount + ' / 3 켜짐',
+        { fontSize: '21px', color: palette.cyan, letterSpacing: '-.03em' });
+      const profiles = css($('div'), { display: 'flex', flexWrap: 'wrap', gap: '6px' });
+      data.profiles.forEach(profile => {
+        const name = profile.name === 'Domain' ? '도메인' : profile.name === 'Private' ? '개인' : '공용';
+        const label = name + ' ' + (profile.enabled ? '켜짐' : '꺼짐');
+        const item = chip(label, profile.enabled ? palette.cyan : palette.amber);
+        item.setAttribute('aria-label', label);
+        put(profiles, item);
+      });
+      put(box, profiles);
+      text(box, 'p', 'Windows 방화벽 설정을 읽기만 합니다. 꺼짐이 곧 침해, 켜짐이 곧 안전을 뜻하지 않습니다.',
+        { margin: 0, fontSize: '11px', lineHeight: '1.6', color: palette.dim });
+    } else if (type === 'events') {
+      const numbers = css($('div'), { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '9px' });
+      const makeCount = (label, number, color) => {
+        const tile = css($('div'), { background: '#18263b', borderRadius: '9px', padding: '10px' });
+        text(tile, 'span', label, { display: 'block', fontSize: '11px', color: palette.dim });
+        text(tile, 'strong', number + '건', { display: 'block', marginTop: '5px', fontSize: '21px', color });
+        return tile;
+      };
+      put(numbers, makeCount('경고', data.warningCount, palette.amber), makeCount('오류', data.errorCount, '#f1a3a8'));
+      put(box, numbers);
+      text(box, 'p', 'System · Application / 최근 24시간' + (data.truncated ? ' · 최대 5,000건 일부 집계' : ' · 조회된 기록 집계'),
+        { margin: 0, fontSize: '11px', color: palette.dim, lineHeight: '1.5' });
+      text(box, 'p', '이 건수는 침해나 공격 탐지 결과가 아닙니다. 이벤트 본문은 조회 화면에 전달하지 않습니다.',
+        { margin: 0, fontSize: '11px', color: palette.amber, lineHeight: '1.6', fontWeight: '600' });
+    }
+    text(box, 'span', '실측 · 이 PC · ' + dateText(at), { marginTop: 'auto', color: '#91a6c5', fontSize: '10px' });
+    return box;
+  }
+  function deltaCount(current, previous, unit) {
+    const delta = current - previous;
+    return delta === 0 ? '변화 없음' : (delta > 0 ? '+' : '−') + Math.abs(delta) + unit;
+  }
+  function securityComparison(current) {
+    const group = css($('div'), { background: '#0d1829', border: '1px solid #29374f',
+      borderRadius: '12px', padding: '15px 16px', marginTop: '12px' });
+    text(group, 'h5', '직전 실측 대비 변화', { margin: '0 0 8px', fontSize: '13px', color: palette.ink });
+    const previous = current && current.ok ? rows.slice(1).find(item => item.ok === true) : null;
+    if (!previous) {
+      text(group, 'p', '유효한 측정 기록 2회 이상이 필요합니다. 조회 실패 결과는 비교하지 않습니다.',
+        { margin: 0, color: palette.dim, fontSize: '12px' });
+      return group;
+    }
+    text(group, 'p', '비교 기준: ' + dateText(previous.at) + ' → ' + dateText(current.at) +
+      ' · 각각의 조회 시점에 실제로 읽힌 항목만 비교', { margin: '0 0 12px', color: palette.dim, fontSize: '11px' });
+    const lines = [];
+    if (current.network.ok && previous.network && previous.network.ok) {
+      lines.push('네트워크 · 인터페이스 ' +
+        deltaCount(current.network.interfaceCount, previous.network.interfaceCount, '개') +
+        ' / IPv4 ' + deltaCount(current.network.ipv4Count, previous.network.ipv4Count, '개'));
+    } else {
+      lines.push('네트워크 · 비교 불가 (한 시점 이상 확인 불가)');
+    }
+    if (current.firewall.ok && previous.firewall && previous.firewall.ok) {
+      const changed = current.firewall.profiles.filter((profile, i) => profile.enabled !== previous.firewall.profiles[i].enabled)
+        .map((profile, i) => {
+          const name = profile.name === 'Domain' ? '도메인' : profile.name === 'Private' ? '개인' : '공용';
+          const old = previous.firewall.profiles.find(item => item.name === profile.name).enabled;
+          return name + ' ' + (old ? '켜짐' : '꺼짐') + ' → ' + (profile.enabled ? '켜짐' : '꺼짐');
+        });
+      lines.push('방화벽 · ' + (changed.length ? changed.join(' · ') : '프로필 상태 변화 없음'));
+    } else {
+      lines.push('방화벽 · 비교 불가 (한 시점 이상 확인 불가)');
+    }
+    if (current.events.ok && previous.events && previous.events.ok) {
+      lines.push('Windows 기록 · 경고 ' + deltaCount(current.events.warningCount, previous.events.warningCount, '건') +
+        ' / 오류 ' + deltaCount(current.events.errorCount, previous.events.errorCount, '건'));
+    } else {
+      lines.push('Windows 기록 · 비교 불가 (한 시점 이상 확인 불가)');
+    }
+    const list = css($('ul'), { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))',
+      gap: '8px', listStyle: 'none', padding: 0, margin: 0 });
+    lines.forEach(line => {
+      const item = css($('li'), { padding: '10px 12px', border: '1px solid #29374f',
+        background: '#142136', color: palette.ink, borderRadius: '8px', fontSize: '11px', lineHeight: '1.5' });
+      item.textContent = line;
+      put(list, item);
+    });
+    put(group, list);
+    text(group, 'p', '최근 24시간 이동 구간의 경고·오류 건수 변화는 새 공격이나 침해 건수가 아닙니다.',
+      { margin: '12px 0 0', color: palette.amber, fontSize: '11px' });
+    return group;
+  }
+  function securitySection(latest, mode) {
+    const section = css($('section'), { marginTop: '14px', background: '#0d1829', border: '1px solid #29374f',
+      borderRadius: '14px', padding: '16px 17px' });
+    const header = css($('div'), { display: 'flex', flexWrap: 'wrap', alignItems: 'center',
+      justifyContent: 'space-between', gap: '10px', marginBottom: '12px' });
+    const name = $('div');
+    text(name, 'h4', '네트워크 · Windows 보안 상태', { margin: '0 0 5px', fontSize: '15px', color: palette.ink });
+    text(name, 'p', '보안 설정을 변경하지 않는 읽기 전용 점검 · 실제 PC 조회값만 표시',
+      { margin: 0, color: palette.dim, fontSize: '11px' });
+    put(header, name, chip('READ ONLY', palette.cyan));
+    put(section, header);
+    const sdpText = mode === 'disconnected' ? 'SDP 미연결(disconnected)' :
+      mode === 'demo' ? 'SDP 예제 모드(demo) · 실제 연결 아님' :
+      mode === 'connected' ? 'SDP 연결 모드(connected) · 실제 정책·권한은 별도 확인' :
+      'SDP 상태 확인 불가(unknown)';
+    const line = css($('p'), { padding: '11px 13px', borderRadius: '8px', background: '#192942',
+      margin: '0 0 13px', fontSize: '12px', lineHeight: '1.5', color: palette.ink });
+    line.textContent = sdpText + ' · PC 조회 성공은 SDP 연결 성공과 별개입니다.';
+    put(section, line);
+    const cards = css($('div'), { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(205px,1fr))', gap: '12px' });
+    const data = latest && latest.ok ? latest : {};
+    put(cards,
+      securityCard('네트워크 구성', 'NET', data.network, 'network', latest && latest.at),
+      securityCard('Windows 방화벽', 'FW', data.firewall, 'firewall', latest && latest.at),
+      securityCard('Windows 이벤트', 'LOG', data.events, 'events', latest && latest.at));
+    put(section, cards, securityComparison(latest));
+    text(section, 'p', '네트워크 인터페이스·IPv4 개수와 Windows 방화벽 프로필, System·Application 최근 24시간 경고·오류 건수만 조회합니다. 관리자 권한을 요구하거나 정책을 변경하지 않습니다.',
+      { margin: '12px 0 0', color: '#9aacc5', fontSize: '11px', lineHeight: '1.6' });
+    return section;
+  }
+
   function drawChart() {
     const outer = css($('div'), { background: '#0d1829', border: '1px solid ' + palette.edge, borderRadius: '14px', padding: '17px', minWidth: '0' });
     text(outer, 'h4', 'CPU · 메모리 사용률 추이', { margin: '0 0 5px', fontSize: '14px', color: palette.ink });
@@ -193,9 +359,9 @@ function createKeshevDay2(api, onChange) {
     }
     rows.slice(0, 7).forEach((row, index) => {
       const line = css($('div'), { display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: index === Math.min(7, rows.length) - 1 ? 'none' : '1px solid #24364e' });
-      const all = row.ok ? ['cpu', 'memory', 'disk'].filter(key => row[key] && row[key].ok).length : 0;
-      text(line, 'span', row.ok && all === 3 ? '●' : '▲', { color: row.ok && all === 3 ? palette.cyan : palette.amber });
-      const message = row.ok ? '실측 ' + all + '/3 · ' + (all === 3 ? '전체 항목 조회' : '일부 항목 확인 불가') :
+      const all = row.ok ? ['cpu', 'memory', 'disk', 'network', 'firewall', 'events'].filter(key => row[key] && row[key].ok).length : 0;
+      text(line, 'span', row.ok && all === 6 ? '●' : '▲', { color: row.ok && all === 6 ? palette.cyan : palette.amber });
+      const message = row.ok ? '실측 ' + all + '/6 · ' + (all === 6 ? '전체 항목 조회' : '일부 항목 확인 불가') :
         (row.code === 'NOT_ALLOWED' ? '조회 API 미지원 · 시작 틀 0.2.21 확인' : '조회 실패 · ' + row.code);
       const column = css($('div'), { flex: '1', minWidth: '0' });
       text(column, 'strong', message, { display: 'block', fontSize: '11px', lineHeight: '1.5', fontWeight: '600', color: palette.ink });
@@ -219,7 +385,8 @@ function createKeshevDay2(api, onChange) {
     text(titleBox, 'h3', '내 PC 관제 대시보드', { margin: 0, color: palette.ink, fontSize: 'clamp(20px, 2.5vw, 28px)', letterSpacing: '-.04em' });
     text(titleBox, 'p', 'PC 실측 정보와 SDP·XDR 원천 상태를 명확히 분리합니다.', { margin: '7px 0 0', fontSize: '12px', color: palette.dim });
     const actions = css($('div'), { display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' });
-    actions.appendChild(chip(pending ? '측정 중' : latest && latest.ok ? '● PC 실측' : rows.length ? '▲ 조회 확인 필요' : '○ 조회 전', pending ? palette.amber : latest && latest.ok ? palette.cyan : palette.dim));
+    const successful = latest && latest.ok ? ['cpu', 'memory', 'disk', 'network', 'firewall', 'events'].filter(key => latest[key] && latest[key].ok).length : 0;
+    actions.appendChild(chip(pending ? '측정 중' : latest && latest.ok ? '● PC 실측 ' + successful + '/6' : rows.length ? '▲ 조회 확인 필요' : '○ 조회 전', pending ? palette.amber : latest && latest.ok && successful === 6 ? palette.cyan : palette.amber));
     const button = css($('button', pending ? '측정 중…' : rows.length ? '다시 조회' : '내 PC 조회'), {
       padding: '10px 15px', borderRadius: '9px', border: '1px solid #60d8e6',
       color: '#081522', background: '#68dfed', fontWeight: '750', fontSize: '12px',
@@ -227,7 +394,7 @@ function createKeshevDay2(api, onChange) {
     });
     button.type = 'button';
     button.disabled = pending;
-    button.setAttribute('aria-label', '이 PC의 CPU 메모리 디스크 사용량을 직접 조회합니다');
+    button.setAttribute('aria-label', '이 PC의 CPU 메모리 디스크 네트워크 방화벽 Windows 이벤트 기록을 읽기 전용으로 조회합니다');
     button.addEventListener('click', measure);
     put(actions, button);
     put(head, titleBox, actions);
@@ -240,6 +407,7 @@ function createKeshevDay2(api, onChange) {
       card('디스크 여유 공간', metrics.disk, '03', latest && latest.at),
       connectionCard(mode));
     put(panel, grid);
+    put(panel, securitySection(latest, mode));
     if (latest && !latest.ok) {
       const help = latest.code === 'NOT_ALLOWED' ? '기존 시작 틀에서는 학생 PC 조회가 허용되지 않습니다. 공식 0.2.21 보존 업데이트를 먼저 적용하세요.' :
         latest.code === 'STALE_READING' ? '측정 시각이 현재와 60초 이상 차이 납니다. 오래된 값을 실측으로 사용하지 않았습니다.' :
@@ -249,7 +417,7 @@ function createKeshevDay2(api, onChange) {
     const lower = css($('div'), { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '12px', marginTop: '14px' });
     put(lower, drawChart(), activity());
     put(panel, lower);
-    text(panel, 'p', '출처: 로컬 PC API /api/pc/status (시작 틀 0.2.21 이상). 측정은 버튼을 누를 때만 수행합니다. Demo 사용자·SDP 데이터는 실측이 아닙니다.', {
+    text(panel, 'p', '출처: 로컬 PC API /api/pc/status (공식 시작 틀 0.2.21 이상). CPU·메모리·디스크·네트워크·방화벽·Windows 기록을 한 번에 읽습니다. 측정은 버튼을 누를 때만 수행합니다. SDP·XDR 예제 자료는 PC 실측값이 아닙니다. 이벤트 건수는 침해 또는 공격 탐지 결과가 아닙니다.', {
       margin: '16px 0 0', color: '#91a6c5', fontSize: '11px', lineHeight: '1.7'
     });
     return panel;
