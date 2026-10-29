@@ -299,6 +299,8 @@ function createKeshevDay2(api, onChange) {
       securityCard('Windows 방화벽', 'FW', data.firewall, 'firewall', latest && latest.at),
       securityCard('Windows 이벤트', 'LOG', data.events, 'events', latest && latest.at));
     put(section, cards, securityComparison(latest));
+    text(section, 'p', 'Windows 기록의 경고·오류 건수는 침해나 공격 탐지 결과가 아닙니다. 수집되지 않은 항목은 확인 불가로 표시하며, 관리자 권한을 요청하거나 방화벽 설정을 변경하지 않습니다.',
+      { margin: '13px 0 0', color: palette.amber, fontSize: '11px', fontWeight: '650', lineHeight: '1.6' });
     text(section, 'p', '네트워크 인터페이스·IPv4 개수와 Windows 방화벽 프로필, System·Application 최근 24시간 경고·오류 건수만 조회합니다. 관리자 권한을 요구하거나 정책을 변경하지 않습니다.',
       { margin: '12px 0 0', color: '#9aacc5', fontSize: '11px', lineHeight: '1.6' });
     return section;
