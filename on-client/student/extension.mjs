@@ -1,6 +1,266 @@
+
+// 마지막 총공세 · 2일차 학생 확장. 제공 서버의 /api/pc/status(0.2.21+)를 읽기만 한다.
+// 값은 요청을 누를 때만 읽고 브라우저 메모리에 최대 16회 보관한다. 예제 수치를 만들지 않는다.
+function createKeshevDay2(api, onChange) {
+  const API_PATH = '/api/pc/status';
+  const rows = [];
+  let pending = false;
+  const redraw = typeof onChange === 'function' ? onChange : () => {};
+  const palette = { ink: '#ecf2ff', dim: '#9cabc4', panel: '#111d31', edge: '#29374f', cyan: '#5dd9e8', violet: '#a99bff', amber: '#ffd18b' };
+  const $ = (tag, text, className) => {
+    const n = document.createElement(tag);
+    if (text !== undefined && text !== null) n.textContent = String(text);
+    if (className) n.className = className;
+    return n;
+  };
+  const css = (node, styles) => {
+    for (const [key, value] of Object.entries(styles)) node.style[key] = value;
+    return node;
+  };
+  const put = (parent, ...children) => {
+    for (const child of children) if (child) parent.appendChild(child);
+    return parent;
+  };
+  const text = (parent, tag, value, styles) => put(parent, css($(tag, value), styles));
+  const dateText = value => {
+    const time = Date.parse(value);
+    return Number.isFinite(time) ? new Date(time).toLocaleString('ko-KR', { hour12: false }) : '확인 불가';
+  };
+  const n = value => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+  const percent = value => n(value) && value <= 100;
+  const gib = bytes => (bytes / 1073741824).toFixed(1) + ' GiB';
+  const reasons = Object.freeze({
+    permission_denied: '읽기 권한 없음', query_failed: 'OS 조회 실패',
+    invalid_response: '응답 형식 오류', invalid_sample: '측정 표본 오류',
+    unsupported: '운영체제 미지원', timeout: '조회 시간 초과',
+    cancelled: '요청 취소'
+  });
+  function metric(raw, key) {
+    const fail = () => ({ ok: false, cause: raw && Object.hasOwn(reasons, raw.reason) ? reasons[raw.reason] : '실측값 확인 불가' });
+    if (!raw || raw.state !== 'ok') return fail();
+    if (key === 'cpu' && percent(raw.usagePercent)) {
+      return { ok: true, value: raw.usagePercent, headline: raw.usagePercent.toFixed(1) + '%', detail: 'CPU 사용률 · 200ms 표본', usage: raw.usagePercent };
+    }
+    if (key === 'memory' && n(raw.usedBytes) && n(raw.totalBytes) && raw.totalBytes > 0 && raw.usedBytes <= raw.totalBytes) {
+      const ratio = 100 * raw.usedBytes / raw.totalBytes;
+      return { ok: true, value: ratio, headline: ratio.toFixed(1) + '%', detail: gib(raw.usedBytes) + ' / ' + gib(raw.totalBytes) + ' 사용', usage: ratio };
+    }
+    if (key === 'disk' && n(raw.freeBytes) && n(raw.totalBytes) && raw.totalBytes > 0 && raw.freeBytes <= raw.totalBytes) {
+      const free = 100 * raw.freeBytes / raw.totalBytes;
+      return { ok: true, value: free, headline: gib(raw.freeBytes), detail: '남은 공간 · 전체 ' + gib(raw.totalBytes) + ' (' + free.toFixed(1) + '% 여유)', usage: 100 - free };
+    }
+    return fail();
+  }
+  async function measure() {
+    if (pending) return;
+    pending = true;
+    redraw();
+    const requestedAt = new Date().toISOString();
+    let result;
+    try {
+      result = api && typeof api.get === 'function' ? await api.get(API_PATH) : null;
+    } catch { result = null; }
+    let row;
+    if (result && result.ok === true && result.data && result.data.schema === 'aleph.on.pc-status.v1'
+        && result.data.source === 'local-pc' && Number.isFinite(Date.parse(result.data.measuredAt))) {
+      if (Math.abs(Date.now() - Date.parse(result.data.measuredAt)) > 60000) {
+        row = { ok: false, at: requestedAt, code: 'STALE_READING' };
+      } else {
+        const m = result.data.metrics || {};
+        row = {
+          ok: true, at: result.data.measuredAt,
+          cpu: metric(m.cpu, 'cpu'), memory: metric(m.memory, 'memory'), disk: metric(m.disk, 'disk')
+        };
+      }
+    } else {
+      const rawCode = result && result.error && result.error.code;
+      const code = typeof rawCode === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(rawCode) ? rawCode : 'REQUEST_FAILED';
+      row = { ok: false, at: requestedAt, code };
+    }
+    rows.unshift(row);
+    if (rows.length > 16) rows.pop();
+    pending = false;
+    redraw();
+  }
+  function chip(label, color = palette.cyan) {
+    return css($('span', label), {
+      display: 'inline-flex', alignItems: 'center', borderRadius: '999px',
+      padding: '5px 10px', fontSize: '11px', fontWeight: '700',
+      color, background: '#17283d', border: '1px solid #30445f'
+    });
+  }
+  function card(name, data, order, at) {
+    const box = css($('div'), {
+      background: palette.panel, border: '1px solid ' + palette.edge, borderRadius: '14px',
+      padding: '17px 16px', minWidth: '0', display: 'flex', flexDirection: 'column', gap: '10px'
+    });
+    const top = css($('div'), { display: 'flex', justifyContent: 'space-between', gap: '9px', alignItems: 'center' });
+    text(top, 'span', name, { fontSize: '12px', fontWeight: '700', color: palette.dim, letterSpacing: '.02em' });
+    top.appendChild(chip(order, palette.dim));
+    const headline = data && data.ok ? data.headline : pending ? '조회 중…' : rows.length ? '확인 불가' : '조회 전';
+    const main = text(box, 'strong', headline, {
+      display: 'block', fontSize: 'clamp(18px, 2.3vw, 27px)', fontWeight: '750',
+      lineHeight: '1.2', letterSpacing: '-.04em', color: data && data.ok ? palette.ink : palette.amber
+    });
+    main.setAttribute('aria-label', name + ' ' + headline);
+    const detail = data && data.ok ? data.detail : pending ? '새 측정값을 읽고 있습니다' :
+      rows.length ? (data && data.cause ? data.cause : '로컬 측정 API 응답을 확인하세요') : '실측 전 · 임의 수치 없음';
+    const footer = data && data.ok ? '실측 · 이 PC · ' + dateText(at) : '측정값 없음';
+    put(box, top);
+    // 숫자보다 라벨이 위에 오도록 원래 생성한 요소를 순서에 맞게 옮긴다.
+    box.insertBefore(top, main);
+    text(box, 'span', detail, { fontSize: '12px', lineHeight: '1.6', color: palette.dim, minHeight: '36px' });
+    if (data && data.ok) {
+      const rail = css($('div'), { height: '5px', background: '#27364d', borderRadius: '8px', overflow: 'hidden' });
+      const fill = css($('div'), {
+        width: Math.min(100, Math.max(0, data.usage)).toFixed(2) + '%',
+        height: '100%', background: order === '02' ? palette.violet : palette.cyan,
+        borderRadius: '8px'
+      });
+      put(rail, fill);
+      put(box, rail);
+    }
+    text(box, 'span', footer, { fontSize: '10px', color: '#8296b8', marginTop: 'auto' });
+    return box;
+  }
+  function connectionCard(mode) {
+    const info = mode === 'demo' ? ['예제 모드', '기존 SDP 데이터는 설명용 예제'] :
+      mode === 'disconnected' ? ['SDP 미연결', '실측 PC 정보와 SDP 연결은 별개'] :
+      mode === 'connected' ? ['연결 모드', '실제 서버 응답 및 권한은 별도 확인'] :
+      ['확인 불가', '현재 연결 모드를 확인하지 못함'];
+    const block = css($('div'), { background: palette.panel, border: '1px solid ' + palette.edge, borderRadius: '14px', padding: '17px 16px', display: 'flex', flexDirection: 'column', gap: '11px' });
+    const top = css($('div'), { display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center' });
+    text(top, 'span', 'SDP 연결 상태', { fontSize: '12px', fontWeight: '700', color: palette.dim });
+    top.appendChild(chip('04', palette.dim));
+    put(block, top);
+    text(block, 'strong', info[0], { fontSize: '23px', color: mode === 'connected' ? palette.cyan : palette.amber, letterSpacing: '-.04em' });
+    text(block, 'span', info[1], { fontSize: '12px', lineHeight: '1.6', color: palette.dim });
+    text(block, 'span', '출처: 케셰브 SDP · PC 실측 아님', { fontSize: '10px', marginTop: 'auto', color: '#8296b8' });
+    return block;
+  }
+  function drawChart() {
+    const outer = css($('div'), { background: '#0d1829', border: '1px solid ' + palette.edge, borderRadius: '14px', padding: '17px', minWidth: '0' });
+    text(outer, 'h4', 'CPU · 메모리 사용률 추이', { margin: '0 0 5px', fontSize: '14px', color: palette.ink });
+    text(outer, 'p', '수동 조회 기준 · 최근 12회 · 브라우저 메모리에만 유지', { margin: '0 0 15px', fontSize: '11px', color: palette.dim });
+    const samples = rows.slice(0, 12).reverse();
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 640 180');
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('height', '180');
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', 'CPU 및 메모리 사용률. 값이 없는 시점은 그래프를 연결하지 않습니다.');
+    const createSvg = (name, attrs, content) => {
+      const element = document.createElementNS('http://www.w3.org/2000/svg', name);
+      for (const [key, value] of Object.entries(attrs)) element.setAttribute(key, String(value));
+      if (content !== undefined) element.textContent = String(content);
+      svg.appendChild(element);
+      return element;
+    };
+    for (const y of [30, 80, 130]) {
+      createSvg('line', { x1: 34, x2: 618, y1: y, y2: y, stroke: '#304158', 'stroke-dasharray': '4 5' });
+    }
+    for (const [value, y] of [[100, 30], [50, 80], [0, 130]]) {
+      createSvg('text', { x: 2, y: y + 4, fill: '#8397b6', 'font-size': 11 }, value + '%');
+    }
+    for (const [key, color] of [['cpu', palette.cyan], ['memory', palette.violet]]) {
+      let previous = null;
+      samples.forEach((sample, idx) => {
+        const v = sample.ok && sample[key] && sample[key].ok ? sample[key].value : null;
+        if (v === null) { previous = null; return; }
+        const x = samples.length <= 1 ? 34 : 34 + (584 * idx / (samples.length - 1));
+        const y = 130 - v;
+        if (previous) createSvg('line', { x1: previous[0], y1: previous[1], x2: x, y2: y, stroke: color, 'stroke-width': 3, 'stroke-linecap': 'round' });
+        createSvg('circle', { cx: x, cy: y, r: 4.2, fill: color, stroke: '#0d1829', 'stroke-width': 2 });
+        previous = [x, y];
+      });
+    }
+    outer.appendChild(svg);
+    const legend = css($('div'), { display: 'flex', flexWrap: 'wrap', gap: '18px', fontSize: '11px', color: palette.dim });
+    for (const [label, color] of [['● CPU', palette.cyan], ['● 메모리', palette.violet]]) {
+      text(legend, 'span', label, { color });
+    }
+    put(outer, legend);
+    if (samples.length < 2) text(outer, 'p', '추이를 보려면 10초쯤 뒤 다시 조회하세요. 실제 측정값을 기다리고 있습니다.', { margin: '12px 0 0', fontSize: '11px', color: palette.dim });
+    return outer;
+  }
+  function activity() {
+    const outer = css($('div'), { background: '#0d1829', border: '1px solid ' + palette.edge, borderRadius: '14px', padding: '17px', minWidth: '0' });
+    text(outer, 'h4', '최근 측정 기록', { margin: '0 0 5px', fontSize: '14px', color: palette.ink });
+    text(outer, 'p', '조회 기록은 새로고침하면 지워집니다 · 외부 전송 없음', { margin: '0 0 14px', fontSize: '11px', color: palette.dim });
+    if (!rows.length) {
+      text(outer, 'p', '아직 조회한 결과가 없습니다.', { color: palette.dim, fontSize: '12px' });
+      return outer;
+    }
+    rows.slice(0, 7).forEach((row, index) => {
+      const line = css($('div'), { display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: index === Math.min(7, rows.length) - 1 ? 'none' : '1px solid #24364e' });
+      const all = row.ok ? ['cpu', 'memory', 'disk'].filter(key => row[key] && row[key].ok).length : 0;
+      text(line, 'span', row.ok && all === 3 ? '●' : '▲', { color: row.ok && all === 3 ? palette.cyan : palette.amber });
+      const message = row.ok ? '실측 ' + all + '/3 · ' + (all === 3 ? '전체 항목 조회' : '일부 항목 확인 불가') :
+        (row.code === 'NOT_ALLOWED' ? '조회 API 미지원 · 시작 틀 0.2.21 확인' : '조회 실패 · ' + row.code);
+      const column = css($('div'), { flex: '1', minWidth: '0' });
+      text(column, 'strong', message, { display: 'block', fontSize: '11px', lineHeight: '1.5', fontWeight: '600', color: palette.ink });
+      text(column, 'span', dateText(row.at), { fontSize: '10px', color: palette.dim });
+      put(line, column);
+      put(outer, line);
+    });
+    return outer;
+  }
+  function render(mode) {
+    const latest = pending ? null : rows[0];
+    const panel = css($('section'), {
+      background: 'linear-gradient(135deg, #0d1729, #101d31 52%, #0d1828)', color: palette.ink,
+      border: '1px solid #344561', borderRadius: '18px', padding: 'clamp(16px, 2vw, 26px)',
+      margin: '0 0 22px', boxShadow: '0 15px 40px rgba(11,22,41,.14)'
+    });
+    panel.setAttribute('aria-label', '케셰브 로컬 실측 관제 대시보드');
+    const head = css($('div'), { display: 'flex', flexWrap: 'wrap', gap: '14px', alignItems: 'center', justifyContent: 'space-between', marginBottom: '21px' });
+    const titleBox = $('div');
+    text(titleBox, 'p', 'KESHEV  /  LOCAL OBSERVABILITY', { margin: '0 0 8px', color: palette.cyan, fontSize: '10px', letterSpacing: '.16em', fontWeight: '800' });
+    text(titleBox, 'h3', '내 PC 관제 대시보드', { margin: 0, color: palette.ink, fontSize: 'clamp(20px, 2.5vw, 28px)', letterSpacing: '-.04em' });
+    text(titleBox, 'p', 'PC 실측 정보와 SDP·XDR 원천 상태를 명확히 분리합니다.', { margin: '7px 0 0', fontSize: '12px', color: palette.dim });
+    const actions = css($('div'), { display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' });
+    actions.appendChild(chip(pending ? '측정 중' : latest && latest.ok ? '● PC 실측' : rows.length ? '▲ 조회 확인 필요' : '○ 조회 전', pending ? palette.amber : latest && latest.ok ? palette.cyan : palette.dim));
+    const button = css($('button', pending ? '측정 중…' : rows.length ? '다시 조회' : '내 PC 조회'), {
+      padding: '10px 15px', borderRadius: '9px', border: '1px solid #60d8e6',
+      color: '#081522', background: '#68dfed', fontWeight: '750', fontSize: '12px',
+      cursor: pending ? 'wait' : 'pointer'
+    });
+    button.type = 'button';
+    button.disabled = pending;
+    button.setAttribute('aria-label', '이 PC의 CPU 메모리 디스크 사용량을 직접 조회합니다');
+    button.addEventListener('click', measure);
+    put(actions, button);
+    put(head, titleBox, actions);
+    put(panel, head);
+    const grid = css($('div'), { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(175px,1fr))', gap: '12px' });
+    const metrics = latest && latest.ok ? latest : {};
+    put(grid,
+      card('CPU 사용률', metrics.cpu, '01', latest && latest.at),
+      card('메모리 사용률', metrics.memory, '02', latest && latest.at),
+      card('디스크 여유 공간', metrics.disk, '03', latest && latest.at),
+      connectionCard(mode));
+    put(panel, grid);
+    if (latest && !latest.ok) {
+      const help = latest.code === 'NOT_ALLOWED' ? '기존 시작 틀에서는 학생 PC 조회가 허용되지 않습니다. 공식 0.2.21 보존 업데이트를 먼저 적용하세요.' :
+        latest.code === 'STALE_READING' ? '측정 시각이 현재와 60초 이상 차이 납니다. 오래된 값을 실측으로 사용하지 않았습니다.' :
+        '조회 실패 (' + latest.code + ') · 실행 중인 서버와 시작 틀을 확인한 뒤 직접 다시 조회하세요.';
+      text(panel, 'p', help, { margin: '12px 0 0', background: '#382a26', padding: '12px 14px', borderRadius: '8px', color: '#ffe2b6', fontSize: '12px' }).setAttribute('role', 'alert');
+    }
+    const lower = css($('div'), { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '12px', marginTop: '14px' });
+    put(lower, drawChart(), activity());
+    put(panel, lower);
+    text(panel, 'p', '출처: 로컬 PC API /api/pc/status (시작 틀 0.2.21 이상). 측정은 버튼을 누를 때만 수행합니다. Demo 사용자·SDP 데이터는 실측이 아닙니다.', {
+      margin: '16px 0 0', color: '#91a6c5', fontSize: '11px', lineHeight: '1.7'
+    });
+    return panel;
+  }
+  return Object.freeze({ render });
+}
+
 // 이 파일은 학생이 같은 프로젝트에서 이어서 구현합니다.
 // 제공 UI를 받은 것만으로 단계 완료를 인정하지 않습니다.
-export function createStudentView() {
+export function createStudentView({ api, onChange } = {}) {
+  const day2Monitor = createKeshevDay2(api, onChange);
   return {
     renderIdentity({ me, devices, sessions } = {}) {
       // 제공 UI는 이 함수를 다시 호출할 때 이전 DOM을 교체한다.
@@ -583,6 +843,7 @@ export function createStudentView() {
         }
       });
       root.appendChild(help);
+      root.prepend(day2Monitor.render(mode));
       return root;
     },
     renderVulnerabilities({ status = 'idle', mode, data, error } = {}) {
