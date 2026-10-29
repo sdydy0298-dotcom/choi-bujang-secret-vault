@@ -21,7 +21,7 @@ function createKeshevDay2(api, onChange) {
     for (const child of children) if (child) parent.appendChild(child);
     return parent;
   };
-  const text = (parent, tag, value, styles) => put(parent, css($(tag, value), styles));
+  const text = (parent, tag, value, styles) => { const child = css($(tag, value), styles); parent.appendChild(child); return child; };
   const dateText = value => {
     const time = Date.parse(value);
     return Number.isFinite(time) ? new Date(time).toLocaleString('ko-KR', { hour12: false }) : '확인 불가';
