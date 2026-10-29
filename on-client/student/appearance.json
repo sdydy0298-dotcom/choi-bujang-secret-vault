@@ -1,0 +1,10 @@
+{
+  "schema": "alekov.student-appearance.v1",
+  "appName": "케셰브",
+  "palette": {
+    "accent": "#2458b5",
+    "background": "#f1f4fa",
+    "surface": "#ffffff"
+  },
+  "dashboardPreset": "student-first"
+}
